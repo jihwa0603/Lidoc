@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <errno.h> // errno 정의를 위해 필요
 
+#include "managing_documents.h"
+
 // 폴더를 확인하고, 없으면 생성하는 함수 (Linux/POSIX 전용)
 int check_and_create_dir(const char *dirname) {
     // mkdir(경로, 권한) 함수 사용. 0755는 소유자(읽기/쓰기/실행), 그룹/기타(읽기/실행) 권한을 의미
