@@ -3,9 +3,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <curses.h>
+#include <string.h>
 #include <errno.h> // errno 정의를 위해 필요
 
 #include "managing_documents.h"
+
 
 // 폴더를 확인하고, 없으면 생성하는 함수 (Linux/POSIX 전용)
 int check_and_create_dir(const char *dirname) {
@@ -47,4 +50,46 @@ int manage_folder() {
 
     printf("--- 모든 폴더 처리 완료 ---\n");
     return 0;
+}
+
+void make_document(char *username, char *document_name) {
+    FILE *fp = NULL;
+    char path1[MAX_PATH];
+    char path2[MAX_PATH];
+    char filename[MAX_PATH];
+
+    // 1. 파일 이름 형식: document_name_by_username
+    // 예: report_2025_by_user1
+    snprintf(filename, MAX_PATH, "%s_by_%s.txt", document_name, username);
+    
+    printf("\n--- 문서 생성 시작 (파일명: %s) ---\n", filename);
+
+    // 2. documents 폴더에 파일 생성
+    // 경로: documents/파일명
+    snprintf(path1, MAX_PATH, "documents/%s", filename);
+
+    fp = fopen(path1, "w"); // 'w' 모드: 쓰기 전용 (파일이 없으면 생성, 있으면 덮어씀)
+    if (fp == NULL) {
+        perror("❌ [documents] 폴더에 파일 생성 실패");
+    } else {
+        fprintf(fp, "이 문서는 일반 문서 폴더에 생성되었습니다.\n");
+        fprintf(fp, "문서 내용: %s\n", document_name);
+        fclose(fp);
+        printf("✅ [documents] 폴더에 문서 생성 성공: '%s'\n", path1);
+    }
+
+    // 3. documents_with_user 폴더에 파일 생성
+    // 경로: documents_with_user/파일명
+    snprintf(path2, MAX_PATH, "documents_with_user/%s", filename);
+
+    fp = fopen(path2, "w");
+    if (fp == NULL) {
+        perror("❌ [documents_with_user] 폴더에 파일 생성 실패");
+    } else {
+        fprintf(fp, "이 문서는 사용자 관련 문서 폴더에 생성되었습니다.\n");
+        fprintf(fp, "사용자: %s\n", username);
+        fprintf(fp, "문서 내용: %s\n", document_name);
+        fclose(fp);
+        printf("✅ [documents_with_user] 폴더에 문서 생성 성공: '%s'\n", path2);
+    }
 }
