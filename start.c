@@ -94,8 +94,8 @@ int main() {
             break; // 키 입력이 있으면 루프 종료
         }
     }
-    show_the_list();
-
+    int selection = show_the_list();
+    
     end_curses();
     return 0;
 }
