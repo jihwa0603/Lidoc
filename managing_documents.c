@@ -17,15 +17,13 @@ int check_and_create_dir(const char *dirname) {
         printf("폴더 생성 성공: '%s'\n", dirname);
         return 0;
     } else {
-        // mkdir 실패 시
-        // 폴더가 이미 존재하는 경우 (EEXIST 오류)
+        // 이미 있을 때
         if (errno == EEXIST) {
-            printf("ℹ폴더가 이미 존재함: '%s'\n", dirname);
-            return 1; // 이미 존재하는 것은 성공으로 간주
+            printf("폴더가 이미 존재함: '%s'\n", dirname);
+            return 0;
         } else {
-            // 다른 오류 (예: 권한 문제)로 생성 실패
             perror("폴더 생성 실패");
-            return -1; // 실패
+            return -1;
         }
     }
 }
@@ -35,27 +33,27 @@ int manage_folder() {
     const char *dir2 = "documents_with_user";
     const char *dir3 = "user_data";
     
-    printf("--- 리눅스 환경에서 폴더 확인 및 생성 시작 ---\n");
+    printf("폴더 확인\n");
     
-    // 1. documents 폴더 처리
+    // documents 폴더 처리
     if (check_and_create_dir(dir1) != 0) {
-        fprintf(stderr, "documents 폴더 처리 중 오류 발생. 프로그램을 종료합니다.\n");
+        fprintf(stderr, "documents 폴더 처리 중 오류 발생\n");
         return 1;
     }
     
-    // 2. documents_with_user 폴더 처리
+    // documents_with_user 폴더 처리
     if (check_and_create_dir(dir2) != 0) {
-        fprintf(stderr, "documents_with_user 폴더 처리 중 오류 발생. 프로그램을 종료합니다.\n");
+        fprintf(stderr, "documents_with_user 폴더 처리 중 오류 발생\n");
         return 1;
     }
 
-    // 3. user_data 폴더 처리
+    // user_data 폴더 처리
     if (check_and_create_dir(dir3) != 0) {
-        fprintf(stderr, "user_data 폴더 처리 중 오류 발생. 프로그램을 종료합니다.\n");
+        fprintf(stderr, "user_data 폴더 처리 중 오류 발생\n");
         return 1;
     }
 
-    printf("--- 모든 폴더 처리 완료 ---\n");
+    printf("모든 폴더 처리 완료\n");
     return 0;
 }
 
@@ -66,47 +64,37 @@ void make_document(char *username, char *document_name) {
     char path3[MAX_PATH];
     char filename[MAX_PATH];
 
-    // 1. 파일 이름 형식: document_name_by_username
     snprintf(filename, MAX_PATH, "%s_by_%s.txt", document_name, username);
     
-    printf("\n--- 문서 생성 시작 (파일명: %s) ---\n", filename);
+    printf("\n문서 생성(파일명: %s)\n", filename);
 
-    // 2. documents 폴더에 파일 생성
-    // 경로: documents/파일명
     snprintf(path1, MAX_PATH, "documents/%s", filename);
 
     fp = fopen(path1, "w");
     if (fp == NULL) {
-        perror("❌ [documents] 폴더에 파일 생성 실패");
+        perror("[documents] 폴더에 파일 생성 실패");
     } else {
         fclose(fp);
-        printf("✅ [documents] 폴더에 문서 생성 성공: '%s'\n", path1);
+        printf("[documents] 폴더에 문서 생성 성공: '%s'\n", path1);
     }
 
-    // 3. documents_with_user 폴더에 파일 생성
-    // 경로: documents_with_user/파일명
     snprintf(path2, MAX_PATH, "documents_with_user/%s", filename);
 
     fp = fopen(path2, "w");
     if (fp == NULL) {
-        perror("❌ [documents_with_user] 폴더에 파일 생성 실패");
+        perror("[documents_with_user] 폴더에 파일 생성 실패");
     } else {
         fclose(fp);
-        printf("✅ [documents_with_user] 폴더에 문서 생성 성공: '%s'\n", path2);
+        printf("[documents_with_user] 폴더에 문서 생성 성공: '%s'\n", path2);
     }
 
-    // 4. user_data 폴더에 파일 생성
-    // 경로: user_data/파일명
-    snprintf(path3, MAX_PATH, "user_data/%s", filename);
+    snprintf(path3, MAX_PATH, "user_data/%s_users.txt", document_name);
     fp = fopen(path3, "w");
     if (fp == NULL) {
-        perror("❌ [user_data] 폴더에 파일 생성 실패");
+        perror("[user_data] 폴더에 파일 생성 실패");
     } else {
-        fprintf(fp, "이 문서는 사용자 데이터 폴더에 생성되었습니다.\n");
-        fprintf(fp, "사용자: %s\n", username);
-        fprintf(fp, "문서 내용: %s\n", document_name);
         fclose(fp);
-        printf("✅ [user_data] 폴더에 문서 생성 성공: '%s'\n", path3);
+        printf("[user_data] 폴더에 문서 생성 성공: '%s'\n", path3);
     }
 }
 
@@ -114,7 +102,6 @@ void register_person(const char *filename, const char *username, const char *col
     FILE *fp = NULL;
     char path[MAX_PATH];
     
-    // 경로: user_data/username_info.txt
     snprintf(path, MAX_PATH, "user_data/%s_users.txt", filename);
     
     fp = fopen(path, "a"); 
@@ -131,7 +118,6 @@ Person* read_persons(const char *filename, int *count) {
     FILE *fp = NULL;
     char path[MAX_PATH];
     
-    // 경로: user_data/username_info.txt
     snprintf(path, MAX_PATH, "user_data/%s_users.txt", filename);
     
     fp = fopen(path, "r");
@@ -139,26 +125,26 @@ Person* read_persons(const char *filename, int *count) {
         perror("사용자 정보 파일 열기 실패");
         return 0;
     } else {
-        // 1. 메모리 할당 구분 가능한 종류는 7가지 이지만 좀 더 크게 10명으로 할당
+        // 메모리 할당 구분 가능한 종류는 7가지 이지만 좀 더 크게 10명으로 할당
         int max_size = 10;
         Person *people = (Person*)malloc(sizeof(Person) * max_size);
         
         int i = 0;
         
-        // 2. 파일 읽기
+        // 파일 읽기
         while (fscanf(fp, "%s %s %ld", people[i].username, people[i].color, &people[i].context) != EOF) {
             i++;
             
-            // (안전장치) 만약 10명이 넘으면 멈춤
+            // 만약 10명이 넘으면 멈춤
             if (i >= max_size) break; 
         }
 
         fclose(fp);
 
-        // 3. 함수 밖으로 "몇 명인지" 알려줌
+        // 몇 명인지 알려줌
         *count = i;
 
-        // 4. 배열의 주소(포인터) 반환
+        // 배열 반환
         return people;
     }
 }
@@ -188,7 +174,7 @@ void change_color(const char* filename, const char* user_name, const char *new_c
         fprintf(stderr, "사용자 정보를 읽어올 수 없습니다.\n");
         return;
     }
-    // 사용자 이름을 찾아서 색상 변경
+    // 사용자 이름을 통해 색상 변경
     for (int i = 0; i < count; i++) {
         if (strcmp(people[i].username, user_name) == 0) {
             strcpy(people[i].color, new_color);
@@ -225,14 +211,14 @@ int get_ncurses_color_code(const char *color_str) {
 }
 
 int get_user_color_pair(const char *target_name, Person *people, int count) {
-    // 1. 등록된 사용자 목록에서 검색
+    // 등록된 사용자 목록에서 검색
     if (people != NULL && count > 0) {
         for (int i = 0; i < count; i++) {
             if (strcmp(people[i].username, target_name) == 0) {
                 // 문자열을 ncurses 색상 코드로 변환
                 int color_code = get_ncurses_color_code(people[i].color);
                 
-                // Pair ID 매핑
+                // 색상 번호
                 if (color_code == COLOR_RED) return 1;
                 if (color_code == COLOR_GREEN) return 2;
                 if (color_code == COLOR_YELLOW) return 3;
@@ -243,11 +229,11 @@ int get_user_color_pair(const char *target_name, Person *people, int count) {
             }
         }
     }
-    // 2. 목록에 없으면 기본 흰색
+    // 목록에 없으면 기본 흰색
     return 7;
 }
 
-void load_smart_document(const char *filename) {
+void load_document(const char *filename) {
     char path[256];
     snprintf(path, sizeof(path), "documents_with_user/%s", filename);
 
@@ -258,16 +244,28 @@ void load_smart_document(const char *filename) {
 
     char current_author[MAX_NAME] = "Unknown";
     int ch;
-    int state = 0; // 0: 텍스트, 1: 태그 내부
+    int state = 0;
+    int escape = 0;
+
     char name_buf[MAX_NAME];
     int name_idx = 0;
 
     while ((ch = fgetc(fp)) != EOF && doc_length < MAX_BUFFER) {
         if (state == 0) {
-            if (ch == '[') {
+            if (escape) {
+                doc_buffer[doc_length].ch = ch;
+                strcpy(doc_buffer[doc_length].author, current_author);
+                doc_length++;
+                escape = 0; 
+            }
+            else if (ch == '\\') {
+                escape = 1; 
+            }
+            else if (ch == '[') {
                 state = 1; 
                 name_idx = 0;
-            } else {
+            } 
+            else {
                 doc_buffer[doc_length].ch = ch;
                 strcpy(doc_buffer[doc_length].author, current_author);
                 doc_length++;
@@ -285,11 +283,11 @@ void load_smart_document(const char *filename) {
     fclose(fp);
 }
 
-void save_smart_document(const char *doc_name, Person *people, int user_count) {
+void save_document(const char *doc_name, Person *people, int user_count) {
     char path_plain[256];
     char path_tagged[256];
     
-    // 1. 순수 텍스트 저장
+    // 순수 문서만
     snprintf(path_plain, sizeof(path_plain), "documents/%s.txt", doc_name);
     FILE *fp_plain = fopen(path_plain, "w");
     if (fp_plain) {
@@ -299,7 +297,7 @@ void save_smart_document(const char *doc_name, Person *people, int user_count) {
         fclose(fp_plain);
     }
 
-    // 2. 태그 포함 저장
+    // 누가 썼는지 포함
     snprintf(path_tagged, sizeof(path_tagged), "documents_with_user/%s.txt", doc_name);
     FILE *fp_tagged = fopen(path_tagged, "w");
     if (fp_tagged) {
@@ -324,13 +322,30 @@ void save_smart_document(const char *doc_name, Person *people, int user_count) {
                     people[person_index].context++;
                 }
             }
-            fputc(doc_buffer[i].ch, fp_tagged);
+            char ch = doc_buffer[i].ch;
+            
+            if (ch == '\\') {
+                fputc('\\', fp_tagged);
+                fputc('\\', fp_tagged); 
+            }
+            else if (ch == '[') {
+                fputc('\\', fp_tagged);
+                fputc('[', fp_tagged);
+            }
+            else if (ch == ']') {
+                fputc('\\', fp_tagged);
+                fputc(']', fp_tagged);
+            }
+            else {
+                fputc(ch, fp_tagged);
+            }
         }
         fclose(fp_tagged);
     }
     save_user_data(doc_name, people, user_count);
 }
 
+// 중간에 문서 작성
 void insert_char(int *cursor, char ch, const char *username) {
     if (doc_length >= MAX_BUFFER - 1) return;
 
@@ -345,6 +360,7 @@ void insert_char(int *cursor, char ch, const char *username) {
     (*cursor)++;
 }
 
+// 중간에 문자 삭제
 void delete_char(int *cursor) {
     if (*cursor == 0 || doc_length == 0) return;
 
@@ -357,6 +373,7 @@ void delete_char(int *cursor) {
     (*cursor)--;
 }
 
+// 커서 위치를 화면 좌표로 변환
 void get_screen_pos(int target_idx, int *y, int *x) {
     int cur_x = 0;
     int cur_y = 0;
@@ -379,18 +396,17 @@ void get_screen_pos(int target_idx, int *y, int *x) {
 }
 
 void run_text_editor(const char *username, const char *document_name) {
-    // 1. 사용자 정보 로드
+    // 사용자 정보 로드
     int user_count = 0;
     Person *users = read_persons(document_name, &user_count);
 
-    // 2. 문서 로드
+    // 문서 로드
     char actual_filename[256];
     snprintf(actual_filename, 256, "%s_by_users.txt", document_name);
-    load_smart_document(actual_filename);
+    load_document(actual_filename);
 
     int cursor_idx = doc_length;
 
-    // --- Ncurses 초기화 ---
     initscr();
     raw();
     keypad(stdscr, TRUE);
@@ -398,7 +414,7 @@ void run_text_editor(const char *username, const char *document_name) {
     cbreak();
     start_color();
 
-    // 색상 팔레트 정의 (Pair ID, 글자색, 배경색)
+    // 색 설정
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     init_pair(3, COLOR_YELLOW, COLOR_BLACK);
@@ -411,7 +427,7 @@ void run_text_editor(const char *username, const char *document_name) {
     while (1) {
         clear();
 
-        // [상단바]
+        // 상단바
         attron(COLOR_PAIR(8));
         mvprintw(0, 0, "%-*s", COLS, " "); 
         
@@ -419,7 +435,7 @@ void run_text_editor(const char *username, const char *document_name) {
         mvprintw(0, 0, "[사용자: %s(Color %d)] (F2: 저장 / F10: 종료)", username, my_color_id);
         attroff(COLOR_PAIR(8));
 
-        // [본문 출력]
+        // 본문 출력
         int screen_y = 2; 
         move(screen_y, 0); 
         
@@ -431,7 +447,7 @@ void run_text_editor(const char *username, const char *document_name) {
             attroff(COLOR_PAIR(color_id));
         }
 
-        // [커서 위치 설정]
+        // 커서 위치 설정
         int cur_y, cur_x;
         get_screen_pos(cursor_idx, &cur_y, &cur_x);
         move(screen_y + cur_y, cur_x);
@@ -444,7 +460,7 @@ void run_text_editor(const char *username, const char *document_name) {
             break; 
         } 
         else if (ch == KEY_F(2)) {
-            save_smart_document(document_name, users, user_count);
+            save_document(document_name, users, user_count);
             mvprintw(LINES - 1, 0, "저장 완료!");
             getch();
         }

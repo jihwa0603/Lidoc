@@ -23,7 +23,7 @@ typedef struct {
     long context;
 } Person;
 
-// [핵심 구조체] 문자 하나와 그 문자를 쓴 사람을 함께 저장
+// 문자 하나와 그 문자를 쓴 사람을 함께 저장
 typedef struct {
     char ch;              // 실제 글자
     char author[MAX_NAME]; // 작성자 이름
@@ -38,8 +38,8 @@ void change_color(const char* filename, const char* user_name, const char *new_c
 void save_user_data(const char *filename, Person *people, int count);
 int get_ncurses_color_code(const char *color_str);
 int get_user_color_pair(const char *target_name, Person *people, int count);
-void load_smart_document(const char *filename);
-void save_smart_document(const char *doc_name, Person *people, int user_count);
+void load_document(const char *filename);
+void save_document(const char *doc_name, Person *people, int user_count);
 void insert_char(int *cursor, char ch, const char *username);
 void delete_char(int *cursor);
 void get_screen_pos(int target_idx, int *y, int *x);
