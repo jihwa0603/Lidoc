@@ -341,6 +341,12 @@ void save_document(const char *doc_name, Person *people, int user_count) {
         for (int i = 0; i < doc_length; i++) {
             write(fd_plain, &doc_buffer[i].ch, 1);
         }
+
+        if (doc_length > 0 && doc_buffer[doc_length - 1].ch != '\n') {
+            char newline = '\n';
+            write(fd_plain, &newline, 1);
+        }
+
         close(fd_plain);
     }
 
@@ -400,6 +406,12 @@ void save_document(const char *doc_name, Person *people, int user_count) {
                 write(fd_tagged, &ch, 1);
             }
         }
+
+        if (doc_length > 0 && doc_buffer[doc_length - 1].ch != '\n') {
+            char newline = '\n';
+            write(fd_tagged, &newline, 1);
+        }
+        
         close(fd_tagged);
     }
     save_user_data(doc_name, people, user_count);
