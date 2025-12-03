@@ -12,177 +12,228 @@
 
 #define MAX_USERNAME_LEN 15
 #define MAX_PASSWORD_LEN 15
+#define MAX_USERS 10  // 최대 유저 수 제한
 
+int WIDTH, HEIGHT;
+int loginFlag = 0;
 
-int WIDTH,HEIGHT;
-int loginFlag=0;
-char logged_in_user[50];
-
-typedef struct{
+typedef struct {
     char id[15];
     unsigned long password;
-}User_Process;
+} User_Process;
 
+// 비밀번호 해시 함수
 unsigned long hash_password(const char *str) {
     unsigned long hash = 5381;
     int c;
     while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + c;
     }
     return hash;
 }
 
-void draw_border(){
+void draw_border() {
     clear();
-    getmaxyx(stdscr,HEIGHT,WIDTH);
-    for(int i=0;i<WIDTH-1;i++){
-        mvaddch(0,i,'-');
-        mvaddch(HEIGHT-2,i,'-');
-    }
-   
-     for(int i=0;i<HEIGHT-1;i++){
-        mvaddch(i,0,'|');
-        mvaddch(i,WIDTH-1,'|');
-    }
+    getmaxyx(stdscr, HEIGHT, WIDTH);
+    box(stdscr, 0, 0); // box 함수로 대체 가능 (깔끔함)
     refresh();
 }
-void init_screen(){
+
+void init_screen() {
     setlocale(LC_ALL, "");
     initscr();
     curs_set(0);
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
 }
 
+// 비밀번호 입력 처리 (별표 표시)
 void get_pw(char *buffer, int y, int x) {
-    int i=0;
+    int i = 0;
     int ch;
-    move(y,x);
+    move(y, x);
     while (1) {
         ch = getch();
-        fflush(stdin);
-        if (ch == '\n' || ch == '\r') { 
+        if (ch == '\n' || ch == '\r') {
             buffer[i] = '\0';
             break;
-        } else if (ch == 127 || ch == 8) { 
+        } else if (ch == 127 || ch == KEY_BACKSPACE || ch == 8) {
             if (i > 0) {
                 i--;
-                mvaddch(y, x + i, ' '); 
+                mvaddch(y, x + i, ' ');
                 move(y, x + i);
             }
-        } else if (i < MAX_PASSWORD_LEN) {
+        } else if (i < MAX_PASSWORD_LEN && ch >= 32 && ch <= 126) { // 출력 가능한 문자만
             buffer[i++] = ch;
-            addch('*'); 
+            addch('*');
         }
         refresh();
     }
 }
 
+// 등록된 유저 수 확인 함수
+int get_user_count(const char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL) return 0;
 
-void RegisterForm(){
-    char *buffer=malloc(MAX_PASSWORD_LEN+1);
-    clear();
-    draw_border();
-    refresh();
-    User_Process t1;
-    mvprintw(HEIGHT/2-2,WIDTH/2-10, "=== REGISTER ===");
-    int fid;
-    mvprintw(HEIGHT/2,WIDTH/2,"Enter your Id:");
-    refresh();
-    echo(); 
-    mvgetstr(HEIGHT/2 , WIDTH/2+14, t1.id);
-    noecho();
-    mvprintw(HEIGHT/2+1,WIDTH/2,"Enter your password:");
-    get_pw(buffer,HEIGHT/2+1,WIDTH/2+22);
-    echo();
-    char buf[100];
-    unsigned long hashed_pw=hash_password(buffer);
-    sprintf(buf,"%s %lu\n", t1.id,hashed_pw);
-    if((fid=open("UserLog.txt",O_WRONLY|O_CREAT|O_APPEND,0700))==-1){
-        perror("Error!");
-        exit(1);
-    }
-    if (write(fid, buf, strlen(buf)) == -1) {
-        endwin();
-        perror("Error writing");
-        close(fid);
-        exit(1);
-    }
+    int count = 0;
+    char temp_id[50];
+    unsigned long temp_pw;
     
-    close(fid);
-    mvprintw(HEIGHT/2+3, (WIDTH-25)/2, "Save Complete. Press any key.");
-    getch();
-    refresh();
+    while (fscanf(fp, "%s %lu", temp_id, &temp_pw) != EOF) {
+        count++;
+    }
+    fclose(fp);
+    return count;
 }
 
-
-
-
-void loginForm(char *result_id){
-    clear();
-    draw_border();
-    refresh();
-    
-    char *buffer = malloc(MAX_PASSWORD_LEN+1);
-    User_Process t1;
-    User_Process che;
-    // struct stat fst; // 안 쓰면 삭제
-    // int fid;         // 안 쓰면 삭제
-
-    mvprintw(HEIGHT/2-2,WIDTH/2-10, "=== LOGIN ===");
-    mvprintw(HEIGHT/2,WIDTH/2,"Enter your Id:");
-    refresh();
-    
-    echo(); 
-    mvgetstr(HEIGHT/2 , WIDTH/2+14, t1.id);
-    noecho();
-    
-    mvprintw(HEIGHT/2+1,WIDTH/2,"Enter your password:");
-    get_pw(buffer,HEIGHT/2+1,WIDTH/2+22);
-    
-    unsigned long temp_pw = hash_password(buffer);
-    FILE* in = fopen("UserLog.txt","r");
-    
-    // 파일 없을 때 예외처리 추가 추천
-    if(in == NULL) {
-        mvprintw(HEIGHT/2+3, (WIDTH-25)/2, "No User Database!");
+// 회원가입 폼
+void RegisterForm(const char *db_path) {
+    // 1. 인원 제한 체크
+    int count = get_user_count(db_path);
+    if (count >= MAX_USERS) {
+        clear();
+        draw_border();
+        mvprintw(HEIGHT/2, (WIDTH-40)/2, "Registration Failed: Max users (%d) reached!", MAX_USERS);
+        mvprintw(HEIGHT/2+2, (WIDTH-20)/2, "Press any key to return.");
         getch();
-        free(buffer);
         return;
     }
 
-    loginFlag = 0; // 초기화
-    while(fscanf(in,"%s %lu", che.id, &che.password) != -1){
-        if (strcmp(che.id, t1.id) == 0 && temp_pw == che.password) {
-            loginFlag = 1;
-            break;
-        }
-    }
-    fclose(in);
+    char *buffer = malloc(MAX_PASSWORD_LEN + 1);
+    clear();
+    draw_border();
     
-    if(loginFlag){
-        mvprintw(HEIGHT/2+3,(WIDTH-25)/2, "Login Successful!");
-        // ★ 성공 시 입력한 ID를 결과 변수에 복사
-        strcpy(result_id, t1.id);
-        refresh();
+    User_Process t1;
+    mvprintw(HEIGHT/2 - 4, (WIDTH-16)/2, "=== REGISTER ===");
+    
+    // ID 입력
+    mvprintw(HEIGHT/2 - 1, WIDTH/2 - 10, "Enter ID: ");
+    echo();
+    curs_set(1);
+    mvgetnstr(HEIGHT/2 - 1, WIDTH/2 + 2, t1.id, MAX_USERNAME_LEN);
+    noecho();
+    curs_set(0);
+
+    // PW 입력
+    mvprintw(HEIGHT/2 + 1, WIDTH/2 - 10, "Enter PW: ");
+    get_pw(buffer, HEIGHT/2 + 1, WIDTH/2 + 2);
+
+    // 저장 로직
+    char buf[100];
+    unsigned long hashed_pw = hash_password(buffer);
+    sprintf(buf, "%s %lu\n", t1.id, hashed_pw);
+
+    // 파일 열기 (없으면 생성)
+    int fid = open(db_path, O_WRONLY | O_CREAT | O_APPEND, 0644); // 0700 -> 0644 (일반권한)
+    if (fid == -1) {
+        endwin();
+        perror("File Open Error");
+        exit(1);
     }
-    else{
-        mvprintw(HEIGHT/2+3,(WIDTH-25)/2, "Login Failed! Retry");
-        refresh();
+    
+    if (write(fid, buf, strlen(buf)) == -1) {
+        close(fid);
+        endwin();
+        perror("Write Error");
+        exit(1);
+    }
+
+    close(fid);
+    free(buffer);
+
+    mvprintw(HEIGHT/2 + 4, (WIDTH-30)/2, "Registration Complete!");
+    mvprintw(HEIGHT/2 + 5, (WIDTH-20)/2, "Press any key.");
+    getch();
+}
+
+// 로그인 폼
+void loginForm(const char *db_path, char *result_id) {
+    clear();
+    draw_border();
+    
+    char *buffer = malloc(MAX_PASSWORD_LEN + 1);
+    User_Process t1;
+    User_Process che;
+
+    mvprintw(HEIGHT/2 - 4, (WIDTH-10)/2, "=== LOGIN ===");
+    
+    // ID 입력
+    mvprintw(HEIGHT/2 - 1, WIDTH/2 - 10, "ID: ");
+    echo();
+    curs_set(1);
+    mvgetnstr(HEIGHT/2 - 1, WIDTH/2 - 5, t1.id, MAX_USERNAME_LEN);
+    noecho();
+    curs_set(0);
+
+    // PW 입력
+    mvprintw(HEIGHT/2 + 1, WIDTH/2 - 10, "PW: ");
+    get_pw(buffer, HEIGHT/2 + 1, WIDTH/2 - 5);
+    
+    unsigned long temp_pw = hash_password(buffer);
+    FILE *in = fopen(db_path, "r");
+
+    loginFlag = 0;
+    if (in == NULL) {
+        mvprintw(HEIGHT/2 + 4, (WIDTH-30)/2, "No users found. Please Register.");
+    } else {
+        while (fscanf(in, "%s %lu", che.id, &che.password) != EOF) {
+            if (strcmp(che.id, t1.id) == 0 && temp_pw == che.password) {
+                loginFlag = 1;
+                break;
+            }
+        }
+        fclose(in);
+    }
+    
+    if (loginFlag) {
+        strcpy(result_id, t1.id);
+        mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Successful!");
+    } else {
+        mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Failed!");
     }
     
     getch();
-    free(buffer); // 메모리 해제
+    free(buffer);
 }
 
-int do_login_process(char *username_out) {
-    setlocale(LC_ALL, "");
-    init_screen();
-    draw_border();
-    
-    // loginForm 호출 시 username_out 주소를 넘겨줌
-    loginForm(username_out);
-    
-    if (loginFlag) {
-        return 1; // 성공
+// 로그인/회원가입 선택 메뉴
+int ask_auth_menu() {
+    int selection = 0;
+    while(1) {
+        clear();
+        draw_border();
+        mvprintw(HEIGHT/2 - 3, (WIDTH-24)/2, "=== Authentication ===");
+        
+        if(selection == 0) attron(A_REVERSE);
+        mvprintw(HEIGHT/2 - 1, (WIDTH-10)/2, "1. Login");
+        attroff(A_REVERSE);
+
+        if(selection == 1) attron(A_REVERSE);
+        mvprintw(HEIGHT/2 + 1, (WIDTH-13)/2, "2. Register");
+        attroff(A_REVERSE);
+
+        int ch = getch();
+        if (ch == KEY_UP) selection = 0;
+        else if (ch == KEY_DOWN) selection = 1;
+        else if (ch == '\n' || ch == KEY_ENTER) return selection; // 0: Login, 1: Register
     }
-    return 0; // 실패
+}
+
+// 외부에서 호출하는 메인 함수
+int do_auth_process(const char *db_path, char *username_out) {
+    // ncurses 초기화가 안 되어 있다면 수행 (보통 main에서 하지만 안전장치)
+    // init_screen(); 
+
+    while (1) {
+        int choice = ask_auth_menu();
+        if (choice == 0) { // Login
+            loginForm(db_path, username_out);
+            if (loginFlag) return 1; // 성공 시 리턴
+        } else { // Register
+            RegisterForm(db_path);
+            // 회원가입 후에는 다시 메뉴로 돌아감 (바로 로그인시키지 않음)
+        }
+    }
 }

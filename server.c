@@ -123,19 +123,22 @@ void *handle_client_thread(void *arg) {
             }
 
         } else if (pkt.command == CMD_RELEASE_LOCK) {
-            // 로그 추가
-            FILE* fd = fopen("hello.txt","w");
-            fprintf(fd,"[DEBUG] Release Lock requested by sock %d\n", client_sock);
 
             if (current_writer_sock == client_sock) {
-                current_writer_sock = -1; // 잠금 해제
+                current_writer_sock = -1;
                 strcpy(current_writer_name, "");
 
-                Packet noti;
-                memset(&noti, 0, sizeof(Packet)); // 초기화
-                noti.command = CMD_LOCK_UPDATE;
-                strcpy(noti.message, "[해제] 누구나 작성 가능");
-                send_to_all(&noti, -1);
+                // ★ [변경] 단순 메시지가 아니라, 'CMD_RELEASE_LOCK' 패킷을 그대로 방송합니다.
+                // 이 패킷을 받은 다른 클라이언트들은 "아, 작성 끝났구나. 저장하자"라고 인식하게 됩니다.
+                Packet release_pkt;
+                memset(&release_pkt, 0, sizeof(Packet));
+                
+                release_pkt.command = CMD_RELEASE_LOCK; // 저장 및 해제 신호
+                strcpy(release_pkt.username, pkt.username); // 누가 저장을 마쳤는지
+                
+                // client_sock(작성자)을 제외한 모든 사람에게 전송
+                // (작성자는 이미 자신의 컴퓨터에 저장했으므로)
+                send_to_all(&release_pkt, client_sock);
             }
         } else if (pkt.command == CMD_INSERT || pkt.command == CMD_DELETE) {
             // 실제 작성 요청: 권한 있는 사람인지 한 번 더 체크 (보안)

@@ -1,8 +1,7 @@
-// login.h
 #ifndef LOGIN_H
 #define LOGIN_H
 
-// 로그인 성공 시 1, 실패 시 0 반환. 성공 시 username에 ID 저장.
-int do_login_process(char *username_out); 
+// DB 경로와 성공 시 ID를 담을 버퍼를 인자로 받음
+int do_auth_process(const char *db_path, char *username_out);
 
 #endif

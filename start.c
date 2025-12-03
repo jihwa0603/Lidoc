@@ -216,70 +216,87 @@ int main() {
     // 1. 폴더 초기화
     manage_folder();
 
-    // 2. 로그인 프로세스
-    char username[20];
-    // login.c의 로직을 통해 username을 채워와야 함
-    // 임시로 하드코딩된 예시: (실제로는 do_login_process 호출)
-    // if (!do_login_process(username)) return 0; 
-    strcpy(username, "TestUser"); // 테스트용
-
-    // 3. 메인 UI 시작
+    // ncurses 시작
     default_start();
     
+    // 초기 대기 (엔터키 등)
     timeout(100); 
-    while(1){
-        int ch = getch(); 
-        if (ch != ERR) break; 
-    }
-    timeout(-1); // 다시 블로킹 모드로
+    while(1){ int ch = getch(); if (ch != ERR) break; }
+    timeout(-1);
 
     while(1) {
         int selection = show_the_list(); // 메뉴 선택
 
         if (selection == 0) { 
-            // 1. Start Server (Host Mode)
+            // ====================================================
+            // 1. Server Start (Host Mode)
+            // ====================================================
             char ip[30]; 
             int port;
             char doc_name[30];
-            
-            get_connection_info(ip, &port, doc_name, 1);
-            
-            // 서버는 백그라운드 프로세스(fork)로 실행해야 UI가 멈추지 않음
-            pid_t pid = fork();
-            if (pid == 0) {
-                int log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                if (log_fd > 0) {
-                    dup2(log_fd, STDOUT_FILENO); // printf -> 파일
-                    dup2(log_fd, STDERR_FILENO); // perror -> 파일
-                    close(log_fd);
+            char username[20];
+            char db_path[100];
+
+            // (1) 방 설정 정보 입력 (IP는 127.0.0.1, Port, 문서명)
+            // 방장이므로 파일 목록(1) 보여줌
+            get_connection_info(ip, &port, doc_name, 1); 
+
+            // (2) 해당 방의 유저 DB 경로 생성
+            // 예: user_data/testdoc_userslog.txt
+            snprintf(db_path, sizeof(db_path), "user_data/%s_userslog.txt", doc_name);
+
+            // (3) 로그인/회원가입 프로세스 실행
+            // 성공해야만(1 반환) 다음으로 넘어감
+            if (do_auth_process(db_path, username)) {
+                
+                // 로그인 성공 후 서버 실행
+                pid_t pid = fork();
+                if (pid == 0) {
+                    // [자식: 서버]
+                    int log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    if (log_fd > 0) {
+                        dup2(log_fd, STDOUT_FILENO);
+                        dup2(log_fd, STDERR_FILENO);
+                        close(log_fd);
+                    }
+                    run_server(port, 10); 
+                    exit(0);
+                } else if (pid > 0) {
+                    // [부모: 클라이언트(방장)]
+                    sleep(1); 
+                    connect_to_server("127.0.0.1", port, username, doc_name, 1);
+                    kill(pid, SIGTERM); // 에디터 종료 시 서버도 종료
                 }
-                
-                run_server(port, 10); 
-                exit(0);
-            } else if (pid > 0) {
-                // [부모 프로세스: 클라이언트]
-                sleep(1); // 서버 켜질 때까지 잠시 대기
-                // is_host = 1
-                connect_to_server("127.0.0.1", port, username, doc_name, 1);
-                
-                // 에디터 끝나면 서버도 종료 (선택 사항)
-                kill(pid, SIGTERM);
             }
+            // 로그인을 취소하거나 실패하면 다시 메뉴로 돌아감
 
         } else if (selection == 1) {
+            // ====================================================
             // 2. Connect to Server (Guest Mode)
+            // ====================================================
             char ip[30]; 
             int port;
-            char doc_name[30]; // 접속할 때는 필요 없을 수도 있지만, 일단 입력
+            char doc_name[30];
+            char username[20];
+            char db_path[100];
             
-            get_connection_info(ip, &port, doc_name,0);
+            // (1) 접속 정보 입력 (방 제목을 정확히 입력해야 로그인 가능)
+            // 게스트이므로 파일 목록(0) 안 보여줌
+            get_connection_info(ip, &port, doc_name, 0);
             
-            // Guest 모드로 접속 (is_host = 0)
-            if (connect_to_server(ip, port, username, doc_name, 0) < 0) {
-                end_curses(); // 에러 메시지 잘 보이게 잠시 종료
-                printf("Connection Failed!\n");
-                getchar(); // 엔터 대기
-                default_start(); // 다시 시작
+            // (2) 방 제목을 기반으로 DB 경로 설정
+            // (로컬 파일 시스템 공유를 가정함)
+            snprintf(db_path, sizeof(db_path), "user_data/%s_userslog.txt", doc_name);
+
+            // (3) 로그인/회원가입 프로세스 실행
+            if (do_auth_process(db_path, username)) {
+                // 로그인 성공 시 서버 접속
+                if (connect_to_server(ip, port, username, doc_name, 0) < 0) {
+                    end_curses();
+                    printf("Connection Failed!\n");
+                    getchar();
+                    default_start();
+                }
             }
 
         } else if (selection == 4) {
