@@ -574,7 +574,7 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
     noecho();
     cbreak();
     keypad(stdscr, TRUE);
-    raw();
+    // raw();
     timeout(100); // 0.1초 대기
 
     // 수신 스레드 시작
@@ -612,14 +612,10 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
     while (1) {
         // === 화면 그리기 ===
         pthread_mutex_lock(&win_mutex);
-        draw_document(username); // ★ 함수 호출로 대체!
-        pthread_mutex_unlock(&win_mutex);
+        clear();
+        draw_document(username); // ★ 함수 호출로 대체
         // ==================
-
-        ch = getch(); 
-
-        if (ch == ERR) continue; // 입력 없으면 다시 그림
-        
+        // 입력 없으면 다시 그림
         // 상단바 표시
         if (can_i_write) {
             attron(COLOR_PAIR(1)); // 빨간색 등 강조
@@ -638,10 +634,13 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
 
         // === 키 입력 처리 ===
         ch = getch(); // 여기서 대기
-
+        if(ch==ERR){
+                continue;
+        }
         if (can_i_write) {
             // [내가 작성자일 때]
             Packet pkt;
+            memset(&pkt, 0, sizeof(Packet));
             strcpy(pkt.username, username);
 
             if (ch == 27) { // ESC 키
@@ -653,6 +652,17 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
                 pkt.command = CMD_DELETE;
                 pkt.cursor_index = cursor_idx; // 현재 내 커서 위치
                 write(my_socket, &pkt, sizeof(Packet));
+                if (cursor_idx > 0) {
+                    // 배열 당겨오기 (삭제 로직)
+                    for (int i = cursor_idx - 1; i < doc_length - 1; i++) {
+                        doc_buffer[i] = doc_buffer[i + 1]; 
+                    }
+                    // 마지막 칸 비우기 (선택사항)
+                    doc_buffer[doc_length - 1].ch = '\0'; 
+                    
+                    doc_length--; // 전체 길이 줄임
+                    cursor_idx--; // 커서도 한 칸 앞으로
+                }
                 // 내 커서 이동 로직은 recv_thread가 업데이트 해줄 때까지 기다리거나
                 // 예측해서 움직일 수 있음.
 
@@ -661,6 +671,18 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
                 pkt.ch = ch;
                 pkt.cursor_index = cursor_idx;
                 write(my_socket, &pkt, sizeof(Packet));
+                if (doc_length < MAX_BUFFER) {
+                    for (int i = doc_length; i > cursor_idx; i--) {
+                        doc_buffer[i] = doc_buffer[i-1];
+                    }
+                    // 현재 위치에 글자 넣기
+                    doc_buffer[cursor_idx].ch = ch;
+                    // 속성 등 추가 정보가 있다면 같이 복사
+                    // doc_buffer[cursor_idx].color = ...; 
+                    
+                    doc_length++;
+                    cursor_idx++; // 커서도 한 칸 전진
+                }
             }
             
         } else {
