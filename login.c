@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <locale.h>
+
+#include "login.h"
 
 #define MAX_USERNAME_LEN 15
 #define MAX_PASSWORD_LEN 15
@@ -13,6 +16,7 @@
 
 int WIDTH,HEIGHT;
 int loginFlag=0;
+char logged_in_user[50];
 
 typedef struct{
     char id[15];
@@ -43,6 +47,7 @@ void draw_border(){
     refresh();
 }
 void init_screen(){
+    setlocale(LC_ALL, "");
     initscr();
     curs_set(0);
 }
@@ -111,55 +116,73 @@ void RegisterForm(){
 
 
 
-void loginForm(){
+void loginForm(char *result_id){
     clear();
     draw_border();
     refresh();
-    char *buffer=malloc(MAX_PASSWORD_LEN+1);
+    
+    char *buffer = malloc(MAX_PASSWORD_LEN+1);
     User_Process t1;
     User_Process che;
-    struct stat fst;
-    int fid;
+    // struct stat fst; // 안 쓰면 삭제
+    // int fid;         // 안 쓰면 삭제
+
     mvprintw(HEIGHT/2-2,WIDTH/2-10, "=== LOGIN ===");
     mvprintw(HEIGHT/2,WIDTH/2,"Enter your Id:");
     refresh();
+    
     echo(); 
     mvgetstr(HEIGHT/2 , WIDTH/2+14, t1.id);
     noecho();
+    
     mvprintw(HEIGHT/2+1,WIDTH/2,"Enter your password:");
     get_pw(buffer,HEIGHT/2+1,WIDTH/2+22);
-    unsigned long temp_pw=hash_password(buffer);
-    FILE* in=fopen("UserLog.txt","r");
     
-    while(fscanf(in,"%s %lu",che.id,&che.password)!=-1){
+    unsigned long temp_pw = hash_password(buffer);
+    FILE* in = fopen("UserLog.txt","r");
+    
+    // 파일 없을 때 예외처리 추가 추천
+    if(in == NULL) {
+        mvprintw(HEIGHT/2+3, (WIDTH-25)/2, "No User Database!");
+        getch();
+        free(buffer);
+        return;
+    }
+
+    loginFlag = 0; // 초기화
+    while(fscanf(in,"%s %lu", che.id, &che.password) != -1){
         if (strcmp(che.id, t1.id) == 0 && temp_pw == che.password) {
             loginFlag = 1;
             break;
         }
     }
     fclose(in);
+    
     if(loginFlag){
         mvprintw(HEIGHT/2+3,(WIDTH-25)/2, "Login Successful!");
+        // ★ 성공 시 입력한 ID를 결과 변수에 복사
+        strcpy(result_id, t1.id);
         refresh();
     }
     else{
-         mvprintw(HEIGHT/2+3,(WIDTH-25)/2, "Login Failed! Retry");
+        mvprintw(HEIGHT/2+3,(WIDTH-25)/2, "Login Failed! Retry");
         refresh();
     }
     
     getch();
-    refresh();
+    free(buffer); // 메모리 해제
 }
 
-int main(){
-    
+int do_login_process(char *username_out) {
+    setlocale(LC_ALL, "");
     init_screen();
     draw_border();
-    signal(SIGINT,loginForm);
-    signal(SIGTSTP,RegisterForm);
-    while(1){
-
+    
+    // loginForm 호출 시 username_out 주소를 넘겨줌
+    loginForm(username_out);
+    
+    if (loginFlag) {
+        return 1; // 성공
     }
-
-
+    return 0; // 실패
 }

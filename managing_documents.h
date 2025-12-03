@@ -1,6 +1,8 @@
 #ifndef MANAGING_DOCUMENTS_H
 #define MANAGING_DOCUMENTS_H
 
+#include "common_protocol.h" // Packet 사용을 위해 필요할 수 있음
+
 #define RED "\x1b[31m"
 #define GREEN "\x1b[32m"
 #define YELLOW "\x1b[33m"
@@ -29,6 +31,10 @@ typedef struct {
     char author[MAX_NAME]; // 작성자 이름
 } Cell;
 
+extern int is_host;
+extern Cell doc_buffer[MAX_BUFFER];
+extern int doc_length;
+
 int check_and_create_dir(const char *dirname);
 int manage_folder();
 void make_document(char *username, char *document_name);
@@ -44,5 +50,9 @@ void insert_char(int *cursor, char ch, const char *username);
 void delete_char(int *cursor);
 void get_screen_pos(int target_idx, int *y, int *x);
 void run_text_editor(const char *username, const char *document_name);
+void free_persons(Person *people, int count);
+void server_insert_char(int index, char ch, const char *username);
+void server_delete_char(int index);
+void run_network_text_editor(int socket_fd, char *username, int is_host, char *doc_name);
 
 #endif // MANAGING_DOCUMENTS_H
