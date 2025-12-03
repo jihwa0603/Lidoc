@@ -14,7 +14,7 @@ typedef enum {
     CMD_LOCK_GRANTED,
     CMD_LOCK_DENIED,
     CMD_LOCK_UPDATE,
-    CMD_SYNC_ALL        // ★ 추가: 전체 문서 동기화 명령
+    CMD_SYNC_ALL
 } CommandType;
 
 typedef struct {
@@ -24,8 +24,8 @@ typedef struct {
     char ch;
     char message[100];
     
-    // ★ 추가: 전체 문서 전송용 (4KB)
     char text_content[MAX_BUFFER]; 
+    char author_contents[MAX_BUFFER][20];
     int text_len; // 문서 길이
 } Packet;
 

@@ -25,7 +25,7 @@ void create_question_box(const char *filename){
     int startx=(COLS-width)/2;
 
     question_win=newwin(height, width, starty, startx);
-    box(question_win,0,0);
+    wborder(stdscr, '|', '|', '-', '-', '+', '+', '+', '+');
     mvwprintw(question_win,1,2, "Search Text");
     mvwprintw(question_win,3,2, "Enter text to search: ");
     wrefresh(question_win);

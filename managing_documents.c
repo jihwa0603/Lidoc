@@ -25,13 +25,15 @@ int cursor_idx = 0;
 Person *users = NULL;   
 int user_count = 0;
 
-// [클라이언트 전역 변수 혹은 구조체 상태]
+// 클라이언트 전역 변수 혹은 구조체 상태
 char status_msg[100] = "Ready";
 
 char current_working_doc_name[MAX_PATH] = "untitled";
 
+const char *ALL_COLORS[] = {"red", "green", "yellow", "blue", "magenta", "cyan", "white"};
+const int NUM_COLORS = 7;
+
 int check_and_create_dir(const char *dirname) {
-    // mkdir은 이미 시스템 콜입니다.
     if (mkdir(dirname, 0755) == 0) {
         printf("폴더 생성 성공: '%s'\n", dirname);
         return 0;
@@ -83,16 +85,12 @@ void make_document(char *username, char *document_name) {
     char path3[MAX_PATH + 50];
     char filename[MAX_PATH];
 
-    // filename은 documents/filename 이런식으로 들어오는 게 아니라 document_name을 이용해야 할 듯 하나
-    // 기존 로직을 유지하기 위해 비워둡니다 (기존 코드에서 filename 초기화가 안되어 있었음)
-    // 여기서는 document_name을 filename으로 가정하고 작성합니다.
     strcpy(filename, document_name);
 
     snprintf(path1, sizeof(path1), "documents/%s.txt", filename);
     
     printf("\n문서 생성(파일명: %s.txt)\n", filename);
 
-    // fopen -> open
     fd = open(path1, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd == -1) {
         perror("[documents] 폴더에 파일 생성 실패");
@@ -128,15 +126,13 @@ void register_person(const char *filename, const char *username, const char *col
     
     snprintf(path, MAX_PATH, "user_data/%s_users.txt", filename);
     
-    // fopen(..., "a") -> open(..., O_APPEND)
     fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd == -1) {
-        // 실패하면 새로 생성 시도 (기존 로직 유지)
+        // 실패하면 새로 생성 시도
         fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     }
 
     if (fd != -1) {
-        // fprintf -> snprintf + write
         snprintf(buf, sizeof(buf), "%s %s 0\n", username, color);
         write(fd, buf, strlen(buf));
         close(fd);
@@ -166,17 +162,21 @@ Person* read_persons(const char *filename, int *count) {
         int pos = 0;
         char ch;
 
-        // read로 한 글자씩 읽어서 라인 파싱 (fscanf 대체)
+        // read로 한 글자씩 읽어서 라인 파싱
         while (read(fd, &ch, 1) == 1) {
             if (ch == '\n') {
-                line_buf[pos] = '\0'; // 문자열 종료
+                line_buf[pos] = '\0';
                 
+                if (pos > 0 && line_buf[pos-1] == '\r') {
+                    line_buf[pos-1] = '\0';
+                }
+
                 // sscanf로 파싱
                 if (sscanf(line_buf, "%s %s %ld", people[i].username, people[i].color, &people[i].context) == 3) {
                     i++;
                     if (i >= max_size) break;
                 }
-                pos = 0; // 버퍼 초기화
+                pos = 0;
             } else {
                 if (pos < sizeof(line_buf) - 1) {
                     line_buf[pos++] = ch;
@@ -187,6 +187,8 @@ Person* read_persons(const char *filename, int *count) {
         // 마지막 줄에 개행문자가 없는 경우 처리
         if (pos > 0 && i < max_size) {
             line_buf[pos] = '\0';
+            if (pos > 0 && line_buf[pos-1] == '\r') line_buf[pos-1] = '\0'; // 여기도 처리
+
             if (sscanf(line_buf, "%s %s %ld", people[i].username, people[i].color, &people[i].context) == 3) {
                 i++;
             }
@@ -211,12 +213,10 @@ void save_user_data(const char *filename, Person *people, int count) {
         perror("사용자 정보 파일 열기 실패");
     } else {
         for (int i = 0; i < count; i++) {
-            // fprintf -> snprintf + write
             snprintf(buf, sizeof(buf), "%s %s %ld\n", people[i].username, people[i].color, people[i].context);
             write(fd, buf, strlen(buf));
         }
         close(fd);
-        printf("사용자 데이터 저장 성공: '%s'\n", path);
     }
 }
 
@@ -236,7 +236,7 @@ void change_color(const char* filename, const char* user_name, const char *new_c
             break;
         }
     }
-    // 변경된 내용을 파일에 다시 저장 (save_user_data 함수는 이미 open으로 변경됨)
+    // 변경된 내용을 파일에 다시 저장
     save_user_data(filename, people, count);
     
     free(people);
@@ -285,15 +285,15 @@ void load_document(const char *filename) {
     if (fd == -1) return;
 
     char current_author[MAX_NAME] = "Unknown";
-    char ch; // int ch -> char ch (read용)
+    char ch;
     int state = 0;
     int escape = 0;
 
     char name_buf[MAX_NAME];
     int name_idx = 0;
 
-    // fgetc -> read
     while (read(fd, &ch, 1) == 1 && doc_length < MAX_BUFFER) {
+        // 단순 작성일때
         if (state == 0) {
             if (escape) {
                 doc_buffer[doc_length].ch = ch;
@@ -301,6 +301,7 @@ void load_document(const char *filename) {
                 doc_length++;
                 escape = 0; 
             }
+            // \를 만나면 단순 작성모드
             else if (ch == '\\') {
                 escape = 1; 
             }
@@ -313,6 +314,7 @@ void load_document(const char *filename) {
                 strcpy(doc_buffer[doc_length].author, current_author);
                 doc_length++;
             }
+        // 작성자를 만났음
         } else if (state == 1) {
             if (ch == ']') {
                 state = 0; 
@@ -337,7 +339,6 @@ void save_document(const char *doc_name, Person *people, int user_count) {
     
     if (fd_plain != -1) {
         for (int i = 0; i < doc_length; i++) {
-            // fputc -> write
             write(fd_plain, &doc_buffer[i].ch, 1);
         }
         close(fd_plain);
@@ -357,7 +358,6 @@ void save_document(const char *doc_name, Person *people, int user_count) {
 
         for (int i = 0; i < doc_length; i++) {
             if (strcmp(last_author, doc_buffer[i].author) != 0) {
-                // fprintf -> snprintf + write
                 char tag_buf[100];
                 snprintf(tag_buf, sizeof(tag_buf), "[%s]", doc_buffer[i].author);
                 write(fd_tagged, tag_buf, strlen(tag_buf));
@@ -373,19 +373,25 @@ void save_document(const char *doc_name, Person *people, int user_count) {
                     people[person_index].context++;
                 }
             }
+
+            if (person_index != -1) {
+                people[person_index].context++;
+            }
+
             char ch = doc_buffer[i].ch;
             char escape_bs = '\\';
             char escape_ob = '[';
             char escape_cb = ']';
             
+            // \를 작성한 경우
             if (ch == '\\') {
                 write(fd_tagged, &escape_bs, 1);
                 write(fd_tagged, &escape_bs, 1); 
-            }
+            } // [를 작성했을 때
             else if (ch == '[') {
                 write(fd_tagged, &escape_bs, 1);
                 write(fd_tagged, &escape_ob, 1);
-            }
+            }// ]를 작성했을 때
             else if (ch == ']') {
                 write(fd_tagged, &escape_bs, 1);
                 write(fd_tagged, &escape_cb, 1);
@@ -449,6 +455,46 @@ void get_screen_pos(int target_idx, int *y, int *x) {
     *x = cur_x;
 }
 
+// 위/아래 방향키 처리를 위한 함수 (direction: -1은 위, 1은 아래)
+void move_cursor_vertically(int direction) {
+    int cur_y, cur_x;
+    get_screen_pos(cursor_idx, &cur_y, &cur_x); // 현재 커서의 화면 좌표 구하기
+
+    int target_y = cur_y + direction;
+    if (target_y < 0) return; // 더 이상 위로 갈 수 없음
+
+    // 목표하는 y좌표(target_y)에 있으면서, 현재 x좌표(cur_x)와 가장 가까운 인덱스를 찾음
+    int best_idx = -1;
+    int min_dist = 99999; 
+
+    // 문서 전체를 순회하며 목표 위치 찾기 (문서가 크지 않으므로 가능)
+    // 최적화를 원한다면 현재 인덱스 위주로 탐색 범위를 좁힐 수 있음
+    for (int i = 0; i <= doc_length; i++) {
+        int temp_y, temp_x;
+        get_screen_pos(i, &temp_y, &temp_x);
+
+        if (temp_y == target_y) {
+            int dist = abs(temp_x - cur_x);
+            if (dist < min_dist) {
+                min_dist = dist;
+                best_idx = i;
+            }
+            // 같은 줄에서 x좌표가 멀어지기 시작하면 루프 중단 (최적화)
+            else if (dist > min_dist) {
+                 break; 
+            }
+        }
+        // 목표 줄보다 더 아래로 내려갔다면 탐색 종료
+        else if (temp_y > target_y) {
+            break;
+        }
+    }
+
+    if (best_idx != -1) {
+        cursor_idx = best_idx;
+    }
+}
+
 void server_insert_char(int index, char ch, const char *username) {
     if (index < 0 || index > doc_length || doc_length >= MAX_BUFFER - 1) return;
 
@@ -476,7 +522,7 @@ void draw_document(const char *my_username) {
     clear();
     noecho();
 
-    // 1. 상단바 그리기
+    // 상단바 그리기
     if (can_i_write) {
         attron(COLOR_PAIR(1)); // 빨간색 (작성 모드)
         mvprintw(0, 0, "[작성 모드] 작성 중... (ESC: 저장/반납)  현재 작성자 %s", current_writer);
@@ -484,15 +530,14 @@ void draw_document(const char *my_username) {
     } else {
         attron(COLOR_PAIR(8)); // 흰배경 검은글씨 (읽기 모드)
         mvprintw(0, 0, "[읽기 모드] 엔터(Enter)를 누르면 작성 권한 요청");
-        attroff(COLOR_PAIR(8));
-        
         if (strlen(current_writer) > 0) {
             mvprintw(0, 50, "현재 작성자: %s", current_writer);
         }
+        attroff(COLOR_PAIR(8));
     }
 
-    // 2. 본문 내용 그리기
-    int screen_y = 2; 
+    // 본문 내용 그리기
+    int screen_y = 1; 
     move(screen_y, 0); 
     
     for (int i = 0; i < doc_length; i++) {
@@ -503,7 +548,7 @@ void draw_document(const char *my_username) {
         attroff(COLOR_PAIR(color_id));
     }
 
-    // 3. 커서 위치 잡기
+    // 커서 위치 잡기
     int cur_y, cur_x;
     get_screen_pos(cursor_idx, &cur_y, &cur_x);
     move(screen_y + cur_y, cur_x);
@@ -517,6 +562,7 @@ void *recv_thread_func(void *arg) {
     while (read(my_socket, &pkt, sizeof(Packet)) > 0) {
         pthread_mutex_lock(&win_mutex); 
 
+        // 처음 동기화 명령
         if (pkt.command == CMD_SYNC_ALL) {
             doc_length = 0;
             int len = pkt.text_len;
@@ -524,28 +570,33 @@ void *recv_thread_func(void *arg) {
 
             for (int i = 0; i < len; i++) {
                 doc_buffer[i].ch = pkt.text_content[i];
-                strcpy(doc_buffer[i].author, pkt.username); 
+                strcpy(doc_buffer[i].author, pkt.author_contents[i]);
             }
             doc_length = len;
             
+        // 내가 작성 권한을 얻었음
         } else if (pkt.command == CMD_LOCK_GRANTED) {
             can_i_write = 1;
-            strcpy(current_writer, current_writer); 
+            char temp[100];
+            snprintf(temp, sizeof(temp), "나(%s)", pkt.username);
+            if (strlen(pkt.username) == 0){
+
+            }
+            strcpy(current_writer, temp); 
             
         } else if (pkt.command == CMD_LOCK_DENIED) {
             mvprintw(LINES-1, 0, "거절됨: %s", pkt.message);
 
         } else if (pkt.command == CMD_RELEASE_LOCK) {
-            // ★ [추가] 누군가가 작성을 마치고 저장을 요청함
             
-            // 1. 내 컴퓨터(로컬)에 현재 내용을 저장
+            // 내 컴퓨터(로컬)에 현재 내용을 저장
             save_document(current_working_doc_name, users, user_count);
             
-            // 2. 잠금 상태 해제 (UI 업데이트)
+            // 잠금 상태 해제 (UI 업데이트)
             strcpy(current_writer, "");
             can_i_write = 0;
             
-            // 3. 알림 표시
+            // 알림 표시
             mvprintw(0, 40, "[알림] %s님이 저장함 (내 파일도 업데이트됨)   ", pkt.username);
 
         } else if (pkt.command == CMD_INSERT) {
@@ -569,14 +620,19 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
 
     strcpy(current_working_doc_name, doc_name);
 
+    can_i_write = 0;              // 강제로 '읽기 모드'로 시작
+    memset(current_writer, 0, sizeof(current_writer)); // 작성자 이름 초기화
+    strcpy(current_writer, "");
+
     pthread_t r_thread;
 
     if (users != NULL) free(users); 
     users = read_persons(doc_name, &user_count);
 
-    setlocale(LC_ALL, "");
-
+    setlocale(LC_ALL, ""); // 한글 지원
+    initscr();
     start_color();
+
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     init_pair(3, COLOR_YELLOW, COLOR_BLACK);
@@ -592,21 +648,24 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
     timeout(100); 
     curs_set(1);
 
+    // 내 소켓으로 쓰레드 생성
     pthread_create(&r_thread, NULL, recv_thread_func, NULL);
     pthread_detach(r_thread);
 
+    //방장이면 처음 문서 올리기
     if (is_host) {
         char actual_filename[256];
-        snprintf(actual_filename, 256, "%s_by_users.txt", doc_name);
+        snprintf(actual_filename, 256, "%s.txt", doc_name);
         load_document(actual_filename); 
         cursor_idx = doc_length; 
-
+        
         Packet pkt;
         memset(&pkt, 0, sizeof(Packet));
         pkt.command = CMD_SYNC_ALL;
         strcpy(pkt.username, username);
         for (int i = 0; i < doc_length; i++) {
             pkt.text_content[i] = doc_buffer[i].ch;
+            strcpy(pkt.author_contents[i], doc_buffer[i].author);
         }
         pkt.text_len = doc_length;
         write(my_socket, &pkt, sizeof(Packet));
@@ -621,27 +680,15 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
     timeout(100);
 
     while (1) {
-        // Optimistic UI 반영 전 기존 코드 구조 유지 (사용자 요청 반영)
-        // 화면 그리기 로직은 recv_thread에서 draw_document 호출 및
-        // 아래 refresh()로 처리됨.
-        // 깜빡임 방지를 위해 메인 루프에서 draw_document를 지속 호출하는 것은 
-        // recv_thread와 mutex 경쟁을 할 수 있으므로 draw_document 호출은 
-        // 이벤트 발생 시(키 입력, 수신 등)에만 하는 것이 좋음.
-        // 여기서는 기존 구조대로 유지.
-        
-        // 주의: 이전에 draw_document 호출을 여기서 하도록 수정했었으나,
-        // 현재 제공해주신 코드에는 빠져있어 그대로 둡니다.
-        // 필요 시 pthread_mutex_lock(&win_mutex); draw_document(username); ... 추가 필요
 
         refresh();
-        pthread_mutex_unlock(&win_mutex); // 여기서 unlock만 하는게 맞는지 확인 필요 (Lock 위치가 애매함)
-        // 기존 코드에 위쪽에 lock이 없는데 unlock이 있어서, 
-        // 아마 while문 위쪽 어딘가나 draw_document 호출 전 lock이 있어야 하는데
-        // 제공된 코드상으로는 unlock만 덩그러니 있습니다. 
-        // 에러 방지를 위해 lock/unlock 쌍을 맞추거나 제거하는 것이 좋으나,
-        // 원본 유지를 위해 그대로 둡니다.
 
-        // === 키 입력 처리 ===
+        // 키 입력 전 화면 갱신 (로컬 이동 반영을 위해)
+        pthread_mutex_lock(&win_mutex);
+        draw_document(username);
+        pthread_mutex_unlock(&win_mutex);
+
+        // 키 입력
         ch = getch(); 
         if(ch == ERR){
                 continue;
@@ -651,36 +698,47 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
             memset(&pkt, 0, sizeof(Packet));
             strcpy(pkt.username, username);
 
-            if (ch == 27) { // [ESC 키 입력]
-                
-                // ★ [추가] 서버로 반납하기 전에 내 컴퓨터(로컬)에 먼저 저장합니다.
-                // doc_name: 현재 열려있는 문서 이름
-                // users: 현재 등록된 사용자 정보 (기여도 포함)
-                // user_count: 사용자 수
+            if (ch == KEY_LEFT) {
+                if (cursor_idx > 0) cursor_idx--;
+                continue; // 서버 전송 불필요하므로 continue
+            }
+            else if (ch == KEY_RIGHT) {
+                if (cursor_idx < doc_length) cursor_idx++;
+                continue;
+            }
+            else if (ch == KEY_UP) {
+                move_cursor_vertically(-1);
+                continue;
+            }
+            else if (ch == KEY_DOWN) {
+                move_cursor_vertically(1);
+                continue;
+            }
+
+            if (ch == 27) { // ESC 키 입력
+                //  내 컴퓨터에 저장
                 save_document(doc_name, users, user_count);
                 
-                // 저장 완료 메시지 (잠깐 보여줌)
-                attron(COLOR_PAIR(2)); // 초록색
-                mvprintw(LINES-1, 0, " [내 컴퓨터에 저장 완료!] ");
-                attroff(COLOR_PAIR(2));
-                refresh();
-                usleep(500000); // 0.5초 대기
-
-                // 2. 서버에 잠금 해제 요청 전송
+                // 서버에 반납 신호 전송
                 memset(&pkt, 0, sizeof(Packet)); 
                 pkt.command = CMD_RELEASE_LOCK;
                 strcpy(pkt.username, username); 
-                
                 write(my_socket, &pkt, sizeof(Packet));
                 
+                // 내 상태 변경 (읽기 모드)
                 can_i_write = 0; 
+                strcpy(current_writer, ""); // 상단바의 이름("나")을 지움
                 
+                // 화면 강제 갱신 (빨간색 -> 흰색 전환)
+                pthread_mutex_lock(&win_mutex);
+                draw_document(username);
+                pthread_mutex_unlock(&win_mutex);
+
             } else if (ch == KEY_BACKSPACE || ch == 127) {
                 pkt.command = CMD_DELETE;
                 pkt.cursor_index = cursor_idx; 
                 write(my_socket, &pkt, sizeof(Packet));
                 
-                // Optimistic UI (내 화면 즉시 반영) 코드가 필요하다면 여기에 추가
                 if (cursor_idx > 0) {
                     for (int i = cursor_idx - 1; i < doc_length - 1; i++) {
                         doc_buffer[i] = doc_buffer[i + 1]; 
@@ -695,26 +753,9 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
                 pkt.ch = ch;
                 pkt.cursor_index = cursor_idx;
                 write(my_socket, &pkt, sizeof(Packet));
-                
-                // Optimistic UI (내 화면 즉시 반영)
-                /* 이전에 이중 입력 문제를 해결하기 위해 서버 코드를 수정했으므로,
-                   여기서 내 화면에 직접 그리는 코드가 있어야 '내가 쓴 글'이 보입니다.
-                   제공해주신 코드에는 이 부분이 없어서 추가하지 않았으나,
-                   글자가 안보인다면 아래 주석을 해제하여 추가해야 합니다.
-                */
-                /*
-                if (doc_length < MAX_BUFFER) {
-                    for (int i = doc_length; i > cursor_idx; i--) {
-                        doc_buffer[i] = doc_buffer[i-1];
-                    }
-                    doc_buffer[cursor_idx].ch = ch;
-                    strcpy(doc_buffer[cursor_idx].author, username);
-                    doc_length++;
-                    cursor_idx++;
-                }
-                */
             }
-            
+        
+        // 읽기 상태일 때 작성 권한 요청
         } else {
             if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) { 
                 Packet pkt;
@@ -736,4 +777,113 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
     }
 
     endwin();
+}
+
+// 색이 이미 사용중?
+int is_color_taken(const char *color, Person *people, int count) {
+    for (int i = 0; i < count; i++) {
+        if (strcasecmp(people[i].color, color) == 0) {
+            return 1; // 이미 사용 중
+        }
+    }
+    return 0; // 사용 가능
+}
+
+// 색상 선택 및 사용자 등록을 처리
+void process_login_and_color_selection(char *doc_name, char *username) {
+    int user_count = 0;
+    Person *existing_users = read_persons(doc_name, &user_count);
+    
+    // 이미 등록된 유저인지 확인(색상에서)
+    int already_registered = 0;
+    if (existing_users != NULL) {
+        for (int i = 0; i < user_count; i++) {
+            if (strcmp(existing_users[i].username, username) == 0) {
+                already_registered = 1;
+                break;
+            }
+        }
+    }
+
+    // 이미 등록되어 있다면 바로 종료 (기존 색상 사용)
+    if (already_registered) {
+        if(existing_users) free(existing_users);
+        return;
+    }
+
+    // 등록되지 않은 신규 유저라면 -> 색상 선택
+    curs_set(0);
+    noecho();
+    keypad(stdscr, TRUE);
+
+    int selected_idx = 0;
+    int ch;
+    
+    // 사용 가능한 색상만 추려서 별도 배열에 저장
+    char available_colors[10][20];
+    int avail_count = 0;
+
+    for (int i = 0; i < NUM_COLORS; i++) {
+        if (!is_color_taken(ALL_COLORS[i], existing_users, user_count)) {
+            strcpy(available_colors[avail_count], ALL_COLORS[i]);
+            avail_count++;
+        }
+    }
+
+    // 만약 남은 색상이 없다면 기본값(white)으로 자동 등록 (중복 허용)
+    if (avail_count == 0) {
+        register_person(doc_name, username, "white");
+        if(existing_users) free(existing_users);
+        clear();
+        mvprintw(LINES/2, (COLS-50)/2, "All colors taken. Auto-registered as White.");
+        refresh();
+        usleep(1000000);
+        return;
+    }
+
+    // 색상 선택 루프
+    while (1) {
+        clear();
+        wborder(stdscr, '|', '|', '-', '-', '+', '+', '+', '+');
+        
+        mvprintw(3, (COLS-40)/2, "=== Welcome, %s! ===", username);
+        mvprintw(5, (COLS-50)/2, "You are new to '%s'. Please choose your color.", doc_name);
+
+        int start_y = 8;
+        
+        for (int i = 0; i < avail_count; i++) {
+            if (i == selected_idx) {
+                attron(A_REVERSE); // 선택된 항목 반전
+                mvprintw(start_y + i, (COLS-20)/2, "-> %s", available_colors[i]);
+                attroff(A_REVERSE);
+            } else {
+                mvprintw(start_y + i, (COLS-20)/2, "   %s", available_colors[i]);
+            }
+        }
+        
+        mvprintw(LINES-3, (COLS-30)/2, "[UP/DOWN] Move  [ENTER] Select");
+        refresh();
+
+        ch = getch();
+        if (ch == KEY_UP) {
+            if (selected_idx > 0) selected_idx--;
+            else selected_idx = avail_count - 1; 
+        } else if (ch == KEY_DOWN) {
+            if (selected_idx < avail_count - 1) selected_idx++;
+            else selected_idx = 0; 
+        } else if (ch == '\n' || ch == KEY_ENTER) {
+            // 선택 완료
+            break;
+        }
+    }
+
+    // 선택한 색상으로 파일에 등록
+    register_person(doc_name, username, available_colors[selected_idx]);
+    
+    clear();
+    mvprintw(LINES/2, (COLS-40)/2, "Registered successfully as %s!", available_colors[selected_idx]);
+    refresh();
+    usleep(800000); 
+
+    if(existing_users) free(existing_users);
 }

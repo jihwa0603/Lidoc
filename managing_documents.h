@@ -49,10 +49,12 @@ void save_document(const char *doc_name, Person *people, int user_count);
 void insert_char(int *cursor, char ch, const char *username);
 void delete_char(int *cursor);
 void get_screen_pos(int target_idx, int *y, int *x);
+void move_cursor_vertically(int direction);
 void run_text_editor(const char *username, const char *document_name);
 void free_persons(Person *people, int count);
 void server_insert_char(int index, char ch, const char *username);
 void server_delete_char(int index);
 void run_network_text_editor(int socket_fd, char *username, int is_host, char *doc_name);
+void process_login_and_color_selection(char *doc_name, char *username);
 
 #endif // MANAGING_DOCUMENTS_H

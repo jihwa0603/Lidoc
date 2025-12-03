@@ -35,7 +35,7 @@ unsigned long hash_password(const char *str) {
 void draw_border() {
     clear();
     getmaxyx(stdscr, HEIGHT, WIDTH);
-    box(stdscr, 0, 0); // box 함수로 대체 가능 (깔끔함)
+    wborder(stdscr, '|', '|', '-', '-', '+', '+', '+', '+');
     refresh();
 }
 

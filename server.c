@@ -6,20 +6,19 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <pthread.h> // 멀티 스레드용 헤더
+#include <pthread.h>
 
 #include "server.h"
-#include "common_protocol.h" // 위에서 정의한 프로토콜
-#include "managing_documents.h" // 기존 문서 관리 로직 재사용
+#include "common_protocol.h"
+#include "managing_documents.h"
 
 #define MAX_CLIENTS 10
 
-// 전역 변수: 클라이언트 소켓 관리 및 동기화
 int client_sockets[MAX_CLIENTS];
 int client_count = 0;
-pthread_mutex_t mutx; // 중요: 공유 자원 보호용 뮤텍스
+pthread_mutex_t mutx;
 
-int current_writer_sock = -1; // 현재 작성 중인 사람의 소켓 (-1이면 아무도 안 씀)
+int current_writer_sock = -1; // 현재 작성 중인 사람의 소켓 (-1이면 아무도 안 쓰고 있음)
 char current_writer_name[20] = "";
 
 void error_exit(const char *msg) {
@@ -27,12 +26,11 @@ void error_exit(const char *msg) {
     exit(EXIT_FAILURE);
 }
 
-// 모든 클라이언트에게 패킷 전송 (Broadcasting)
+// 모든 클라이언트에게 패킷 전송
 void send_to_all(Packet *pkt, int sender_sock) {
     pthread_mutex_lock(&mutx);
     for (int i = 0; i < client_count; i++) {
-        // sender_sock가 -1이면 조건 없이 모두에게 보냄
-        // sender_sock가 특정 소켓이면 그 사람 빼고 보냄
+        // sender_sock가 -1이면 조건 없이 모두에게 보냄, 아니면 그 사람을 제외하고 보냄 -> 이제는 필요없지만 혹시나 싶은 에러 방지용으로 일단 삭제는 안했음
         if (sender_sock == -1 || client_sockets[i] != sender_sock) {
             write(client_sockets[i], (void*)pkt, sizeof(Packet));
         }
@@ -40,20 +38,20 @@ void send_to_all(Packet *pkt, int sender_sock) {
     pthread_mutex_unlock(&mutx);
 }
 
-// 클라이언트 핸들러 (스레드 함수)
+// 클라이언트 핸들러 (+ 스레드 포함)
 void *handle_client_thread(void *arg) {
     int client_sock = *((int *)arg);
     ssize_t bytes_read;
     Packet pkt;
 
+    // 방장의 문서로 접속하는 인원에게 배포? 하여 그 문서를 다운받도록(개인 클라이언트 버퍼에)
     pthread_mutex_lock(&mutx);
     if (doc_length > 0) {
         Packet sync_pkt;
         memset(&sync_pkt, 0, sizeof(Packet));
         sync_pkt.command = CMD_SYNC_ALL;
         
-        // 서버의 전역 변수 doc_buffer 내용을 패킷에 복사
-        // (Cell 구조체 -> char 배열로 변환 필요)
+        // 서버의 전역 변수 doc_buffer 내용을 패킷에 복사 (Cell 구조체 -> char 배열로 변환 필요)
         for(int i=0; i<doc_length; i++) {
             sync_pkt.text_content[i] = doc_buffer[i].ch;
         }
@@ -61,17 +59,26 @@ void *handle_client_thread(void *arg) {
         
         // 전송
         write(client_sock, &sync_pkt, sizeof(Packet));
-        printf("Sent initial document (len: %d) to new client.\n", doc_length);
+        printf("새로 들어온 클라이언트에게 초기 문서 제공 (문서 길이: %d) \n", doc_length);
+
+    }
+
+    if (current_writer_sock != -1) {
+        Packet lock_info;
+        memset(&lock_info, 0, sizeof(Packet));
+        lock_info.command = CMD_LOCK_UPDATE;
+        strcpy(lock_info.username, current_writer_name);
+        sprintf(lock_info.message, "[상태동기화] 현재 %s님이 작성 중입니다.", current_writer_name);
+        
+        write(client_sock, &lock_info, sizeof(Packet));
     }
     pthread_mutex_unlock(&mutx);
 
-    // 2. 패킷 수신 루프
+    // 서버의 수신
     while ((bytes_read = read(client_sock, (void*)&pkt, sizeof(Packet))) > 0) {
 
         if (pkt.command == CMD_SYNC_ALL) {
-            // ========================================================
-            // ★ 2. [방장 업로드 처리] 방장이 보낸 문서 서버에 저장
-            // ========================================================
+            // 방장이 보낸 문서 서버에 저장 (처음 방장이 지금 자신이 가진 문서 내용을 업로드)
             
             // 기존 문서 초기화
             doc_length = 0; 
@@ -83,39 +90,35 @@ void *handle_client_thread(void *arg) {
             
             for(int i=0; i<len; i++) {
                 doc_buffer[i].ch = pkt.text_content[i];
-                strcpy(doc_buffer[i].author, pkt.username); // 작성자는 방장 이름으로 통일
+                strcpy(doc_buffer[i].author, pkt.author_contents[i]); // 처음 불러올 때는 각 문자별 작성자를 저장
             }
             doc_length = len;
 
             printf("[SYNC] Host uploaded document. Length: %d\n", doc_length);
-            
-            // (선택 사항) 만약 방장 말고 이미 들어와 있던 다른 사람들이 있다면
-            // 그 사람들에게도 바뀐 문서를 뿌려줘야 할 수 있음.
-            // send_to_all(&pkt, client_sock); 
 
-        }else if (pkt.command == CMD_REQUEST_LOCK) {
+        } else if (pkt.command == CMD_REQUEST_LOCK) {
             // 작성 권한 요청 처리
             if (current_writer_sock == -1) {
-                // 자리가 비었음 -> 너 써라!
+                // 자리가 비었음 -> 너 권한 줄게 ㅇㅇ
                 current_writer_sock = client_sock;
                 strcpy(current_writer_name, pkt.username);
                 
-                // 1. 요청한 사람에게 승인 패킷 전송
+                // 요청한 사람에게 승인 패킷 전송
                 Packet response;
                 response.command = CMD_LOCK_GRANTED;
                 write(client_sock, &response, sizeof(Packet));
 
-                // 2. 다른 사람들에게 "A가 쓰는 중이다"라고 방송
+                // 다른 사람들에게 "A가 쓰는 중이다"라고 알림
                 Packet noti;
                 strcpy(noti.username, pkt.username);
                 noti.command = CMD_LOCK_UPDATE;
 
                 sprintf(noti.message, "[잠금] %s님이 작성 중...", pkt.username);
-                // send_to_all은 나(client_sock)를 빼고 보냄
+
                 send_to_all(&noti, -1); 
 
             } else {
-                // 이미 누가 쓰고 있음 -> 거절
+                // 이미 누가 쓰고 있음 -> 허나 거절한다!
                 Packet response;
                 response.command = CMD_LOCK_DENIED;
                 strcpy(response.message, "다른 사용자가 작성 중입니다.");
@@ -128,8 +131,7 @@ void *handle_client_thread(void *arg) {
                 current_writer_sock = -1;
                 strcpy(current_writer_name, "");
 
-                // ★ [변경] 단순 메시지가 아니라, 'CMD_RELEASE_LOCK' 패킷을 그대로 방송합니다.
-                // 이 패킷을 받은 다른 클라이언트들은 "아, 작성 끝났구나. 저장하자"라고 인식하게 됩니다.
+                // 작성 끝났다 -> 저장하자
                 Packet release_pkt;
                 memset(&release_pkt, 0, sizeof(Packet));
                 
@@ -137,9 +139,10 @@ void *handle_client_thread(void *arg) {
                 strcpy(release_pkt.username, pkt.username); // 누가 저장을 마쳤는지
                 
                 // client_sock(작성자)을 제외한 모든 사람에게 전송
-                // (작성자는 이미 자신의 컴퓨터에 저장했으므로)
+                // (작성자는 이미 자신의 컴퓨터에 저장하도록 설정 해놨음)
                 send_to_all(&release_pkt, client_sock);
             }
+
         } else if (pkt.command == CMD_INSERT || pkt.command == CMD_DELETE) {
             // 실제 작성 요청: 권한 있는 사람인지 한 번 더 체크 (보안)
             if (current_writer_sock == client_sock) {
@@ -154,18 +157,18 @@ void *handle_client_thread(void *arg) {
         pthread_mutex_unlock(&mutx);
     }
 
-    int was_writer = 0; // 나간 사람이 작성자였는지 체크하는 플래그
+    int was_writer = 0; // 나간 사람이 작성자였는지 체크
 
     pthread_mutex_lock(&mutx);
 
-    // (1) 만약 나간 사람이 '작성 권한'을 쥐고 있었다면? -> 강제 반납 처리
+    // 만약 나간 사람이 작성자였다? -> 강제 반납 처리
     if (current_writer_sock == client_sock) {
         current_writer_sock = -1; // 잠금 해제
         strcpy(current_writer_name, ""); // 이름 초기화
-        was_writer = 1; // "이 사람이 범인입니다" 표시 (Lock 풀고 방송하기 위해)
+        was_writer = 1; // 이전 사람이 작성자였음
     }
 
-    // (2) 클라이언트 명부(배열)에서 삭제
+    // 클라이언트 명부(배열)에서 삭제
     for (int i = 0; i < client_count; i++) {
         if (client_sockets[i] == client_sock) {
             // 삭제된 자리(i)를 메우기 위해 뒤의 요소들을 한 칸씩 앞으로 당김
@@ -181,9 +184,7 @@ void *handle_client_thread(void *arg) {
 
     pthread_mutex_unlock(&mutx);
 
-
-    // (3) 만약 작성자가 나간 거라면, 남은 사람들에게 "잠금 해제" 방송
-    // (주의: send_to_all 함수 내부에서 또 Lock을 걸기 때문에, 위에서 Lock을 푼 뒤 호출해야 데드락 안 걸림)
+    // 만약 작성자가 나간 거라면, 남은 사람들에게 해제를 알림
     if (was_writer) {
         Packet noti;
         noti.command = CMD_LOCK_UPDATE;
@@ -194,7 +195,7 @@ void *handle_client_thread(void *arg) {
         send_to_all(&noti, -1);
     }
 
-    // (4) 자원 정리
+    // 자원 정리
     close(client_sock); // 소켓 닫기
     free(arg);          // 스레드 인자 메모리 해제 (malloc 했던 것)
     
@@ -230,6 +231,7 @@ void run_server(int port, int user_count) {
     // Mutex 초기화
     pthread_mutex_init(&mutx, NULL);
 
+    // 서버 초기 설정
     server_sock = make_listening_socket(port, user_count);
     printf("Multi-threaded Server listening on port %d\n", port);
 
@@ -240,6 +242,7 @@ void run_server(int port, int user_count) {
             continue;
         }
 
+        // 들어온 클라이언트 소켓 저장
         pthread_mutex_lock(&mutx);
         if (client_count >= MAX_CLIENTS) {
             close(client_sock);
@@ -251,6 +254,7 @@ void run_server(int port, int user_count) {
 
         printf("New Client Connected: %s\n", inet_ntoa(client_addr.sin_addr));
 
+        // 쓰레드로 바꿀 소켓을 계속해서 새롭게 저장해서 값이 갑자기 바뀌는 거 방지
         int *new_sock = (int *)malloc(sizeof(int));
         *new_sock = client_sock;
 
