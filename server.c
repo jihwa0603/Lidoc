@@ -67,7 +67,6 @@ void *handle_client_thread(void *arg) {
 
     // 2. 패킷 수신 루프
     while ((bytes_read = read(client_sock, (void*)&pkt, sizeof(Packet))) > 0) {
-        pthread_mutex_lock(&mutx);
 
         if (pkt.command == CMD_SYNC_ALL) {
             // ========================================================
@@ -113,7 +112,7 @@ void *handle_client_thread(void *arg) {
 
                 sprintf(noti.message, "[잠금] %s님이 작성 중...", pkt.username);
                 // send_to_all은 나(client_sock)를 빼고 보냄
-                send_to_all(&noti, client_sock); 
+                send_to_all(&noti, -1); 
 
             } else {
                 // 이미 누가 쓰고 있음 -> 거절
@@ -124,18 +123,20 @@ void *handle_client_thread(void *arg) {
             }
 
         } else if (pkt.command == CMD_RELEASE_LOCK) {
-            // 작성 권한 반납
+            // 로그 추가
+            FILE* fd = fopen("hello.txt","w");
+            fprintf(fd,"[DEBUG] Release Lock requested by sock %d\n", client_sock);
+
             if (current_writer_sock == client_sock) {
                 current_writer_sock = -1; // 잠금 해제
                 strcpy(current_writer_name, "");
 
-                // 모두에게 "이제 써도 된다"고 방송
                 Packet noti;
+                memset(&noti, 0, sizeof(Packet)); // 초기화
                 noti.command = CMD_LOCK_UPDATE;
                 strcpy(noti.message, "[해제] 누구나 작성 가능");
-                send_to_all(&noti, -1); // 모두에게 전송
+                send_to_all(&noti, -1);
             }
-
         } else if (pkt.command == CMD_INSERT || pkt.command == CMD_DELETE) {
             // 실제 작성 요청: 권한 있는 사람인지 한 번 더 체크 (보안)
             if (current_writer_sock == client_sock) {
@@ -238,7 +239,6 @@ void run_server(int port, int user_count) {
 
         pthread_mutex_lock(&mutx);
         if (client_count >= MAX_CLIENTS) {
-            printf("Max clients reached. Connection rejected.\n");
             close(client_sock);
             pthread_mutex_unlock(&mutx);
             continue;

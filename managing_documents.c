@@ -14,7 +14,7 @@
 #include "managing_documents.h"
 
 int my_socket = -1;             // 서버와 연결된 소켓
-int can_i_write = 0;            // 0: 읽기 전용, 1: 쓰기 가능
+volatile int can_i_write = 0;            // 0: 읽기 전용, 1: 쓰기 가능
 char current_writer[MAX_NAME] = ""; // 지금 누가 쓰고 있는지
 pthread_mutex_t win_mutex = PTHREAD_MUTEX_INITIALIZER; // 화면 충돌 방지
 
@@ -446,7 +446,7 @@ void draw_document(const char *my_username) {
     // 1. 상단바 그리기
     if (can_i_write) {
         attron(COLOR_PAIR(1)); // 빨간색 (작성 모드)
-        mvprintw(0, 0, "[작성 모드] 작성 중... (ESC: 저장/반납)");
+        mvprintw(0, 0, "[작성 모드] 작성 중... (ESC: 저장/반납)  현재 작성자 %s",current_writer);
         attroff(COLOR_PAIR(1));
     } else {
         attron(COLOR_PAIR(8)); // 흰배경 검은글씨 (읽기 모드)
@@ -508,11 +508,12 @@ void *recv_thread_func(void *arg) {
         } else if (pkt.command == CMD_LOCK_GRANTED) {
             // "너 써도 돼!" -> 권한 획득
             can_i_write = 1;
-            strcpy(current_writer, pkt.username); // "나"
+            strcpy(current_writer, "나"); // "나"
             
         } else if (pkt.command == CMD_LOCK_DENIED) {
             // "안 돼!" -> 알림 표시
             mvprintw(LINES-1, 0, "거절됨: %s", pkt.message);
+
             
         } else if (pkt.command == CMD_LOCK_UPDATE) {
             // "지금 누가 쓰는 중이야/해제했어"
@@ -576,6 +577,7 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
     keypad(stdscr, TRUE);
     // raw();
     timeout(100); // 0.1초 대기
+    curs_set(1);
 
     // 수신 스레드 시작
     pthread_create(&r_thread, NULL, recv_thread_func, NULL);
@@ -610,23 +612,6 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
     timeout(100);
 
     while (1) {
-        // === 화면 그리기 ===
-        pthread_mutex_lock(&win_mutex);
-        clear();
-        draw_document(username); // ★ 함수 호출로 대체
-        // ==================
-        // 입력 없으면 다시 그림
-        // 상단바 표시
-        if (can_i_write) {
-            attron(COLOR_PAIR(1)); // 빨간색 등 강조
-            mvprintw(0, 0, "[작성 모드] 작성 중... (ESC: 저장/반납)");
-            attroff(COLOR_PAIR(1));
-        } else {
-            mvprintw(0, 0, "[읽기 모드] 엔터(Enter)를 누르면 작성 권한 요청");
-            if (strlen(current_writer) > 0) {
-                mvprintw(1,0," (현재 작성자: %s)", current_writer);
-            }
-        }
 
         refresh();
         pthread_mutex_unlock(&win_mutex);
@@ -644,9 +629,13 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
             strcpy(pkt.username, username);
 
             if (ch == 27) { // ESC 키
+                memset(&pkt, 0, sizeof(Packet)); 
                 pkt.command = CMD_RELEASE_LOCK;
+                strcpy(pkt.username, username); // 내 이름을 담아서 보냄 (서버 확인용)
+                
                 write(my_socket, &pkt, sizeof(Packet));
-                can_i_write = 0; // 즉시 반납 상태로
+                
+                can_i_write = 0; // 즉시 반납 상태로 변경
                 
             } else if (ch == KEY_BACKSPACE || ch == 127) {
                 pkt.command = CMD_DELETE;
@@ -687,7 +676,7 @@ void run_network_text_editor(int socket_fd, char *username,int is_host, char *do
             
         } else {
             // [읽기 전용일 때]
-            if (ch == '\n') { // 엔터 키
+            if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) { // 엔터 키
                 Packet pkt;
                 pkt.command = CMD_REQUEST_LOCK;
                 strcpy(pkt.username, username);
