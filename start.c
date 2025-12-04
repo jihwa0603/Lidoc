@@ -48,14 +48,12 @@ int show_the_list(){
     const char *items[] = {
         "1. Start Server",
         "2. Connect to Server",
-        "3. Settings",
-        "4. Help",
-        "5. Exit"
+        "3. Exit"
     };
 
     int height, width;
     getmaxyx(stdscr, height, width); // 사이즈 얻기
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
         mvprintw((height / 2) - 2 + i, (width - strlen(items[i])) / 2, "%s", items[i]);
     }
     mvprintw(height - 2, 2, "Use arrow keys to navigate and Enter to select.");
@@ -73,11 +71,11 @@ int show_the_list(){
         if(ch == KEY_UP){
             current_selection--;
             if(current_selection < 0){
-                current_selection = 4;
+                current_selection = 2;
             }
         } else if(ch == KEY_DOWN){
             current_selection++;
-            if(current_selection > 4){
+            if(current_selection > 2){
                 current_selection = 0;
             }
         } else if(ch == '\n' || ch == KEY_ENTER){
@@ -276,18 +274,18 @@ int main() {
                 // 부모: 방장 클라이언트
                 sleep(1); // 서버 켜질 때까지 잠시 대기
                 
-                // 2) 소켓 연결
+                // 소켓 연결
                 int sock = just_connect("127.0.0.1", port);
                 if (sock < 0) {
                     end_curses(); printf("Server Connection Failed!\n"); return 0;
                 }
 
-                // 3) [핵심] 내 로컬 DB 내용을 서버 메모리로 전송
+                // 내 로컬 DB 내용을 서버 메모리로 전송
                 send_db_file_to_server(sock, doc_name);
 
-                // 4) 로그인 수행 (서버와 통신)
+                // 로그인 수행 (서버와 통신)
                 start_curses();
-                if (network_login_process(sock, username)) {
+                if (network_login_process(sock, username, doc_name)) {
                     // 로그인 성공 -> 색상 선택 -> 에디터 실행
                     process_login_and_color_selection(doc_name, username);
                     end_curses();
@@ -313,7 +311,7 @@ int main() {
             // 접속 정보 입력 (방 제목을 정확히 입력해야 로그인 가능)
             get_connection_info(ip, &port, doc_name, 0);
             
-            // 1) 소켓 연결
+            // 소켓 연결
             int sock = just_connect(ip, port);
             if (sock < 0) {
                 end_curses();
@@ -322,9 +320,9 @@ int main() {
                 continue;
             }
 
-            // 2) 로그인 수행 (서버 메모리와 통신, 로컬 파일 X)
+            // 로그인 수행 (서버 메모리와 통신, 로컬 파일 X)
             start_curses();
-            if (network_login_process(sock, username)) {
+            if (network_login_process(sock, username, doc_name)) {
                 // 로그인 성공
                 process_login_and_color_selection(doc_name, username);
                 end_curses();
@@ -334,7 +332,7 @@ int main() {
             }
             close(sock);
 
-        } else if (selection == 4) {
+        } else if (selection == 2) {
             // Exit
             break;
         }

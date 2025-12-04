@@ -938,27 +938,36 @@ void send_db_file_to_server(int sock, const char *filename) {
     char path[4096];
     snprintf(path, sizeof(path), "user_data/%s_userslog.txt", filename);
 
-    int fd = open(path, O_RDONLY); // fopen 대신 open
-    if (fd == -1) {
-        // 파일 없으면 생성만 해둠
-        fd = open(path, O_CREAT | O_RDWR, 0644);
-        close(fd);
-        return;
-    }
-
+    int fd = open(path, O_RDONLY); 
+    
+    // 패킷 준비
     Packet pkt;
     memset(&pkt, 0, sizeof(Packet));
     pkt.command = CMD_LOAD_USERS;
 
-    // 파일 내용을 패킷 버퍼에 통째로 읽음
-    int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
-    if (len < 0) len = 0;
-    pkt.text_content[len] = '\0'; // 문자열 끝 처리
-    pkt.text_len = len;
+    if (fd == -1) {
+        // [수정] 파일이 없으면 새로 생성만 하고, 읽기 과정은 건너뜀 (내용은 비어있음)
+        // 하지만 패킷 전송 로직은 수행해야 함!
+        int new_fd = open(path, O_CREAT | O_RDWR, 0644);
+        if (new_fd != -1) close(new_fd);
+        
+        pkt.text_len = 0;
+        pkt.text_content[0] = '\0';
+        
+        printf("[HOST] 기존 DB 없음. 새 파일 생성 후 빈 DB 전송.\n");
+    } else {
+        // 파일이 있으면 읽어서 패킷에 담음
+        int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
+        if (len < 0) len = 0;
+        pkt.text_content[len] = '\0'; // 문자열 끝 처리
+        pkt.text_len = len;
+        
+        close(fd);
+        printf("[HOST] 기존 유저 DB 로드하여 전송 (len: %d)\n", len);
+    }
 
+    // [중요] 파일 유무와 상관없이 이 write가 실행되어야 함
     write(sock, &pkt, sizeof(Packet));
-    close(fd);
-    printf("[HOST] 유저 로그 파일 서버로 전송 완료\n");
 }
 
 void send_doc_to_client(int sock) {

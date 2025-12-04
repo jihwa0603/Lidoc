@@ -201,7 +201,7 @@ void loginForm(const char *db_path, char *result_id) {
     free(buffer);
 }
 
-int network_login_process(int sock, char *username_out) {
+int network_login_process(int sock, char *username_out, char* doc_name) {
     char id[20];
     char *pw_buf = malloc(20);
     char hash_str[30];
@@ -276,7 +276,28 @@ int network_login_process(int sock, char *username_out) {
 
             Packet res;
             while(read(sock, &res, sizeof(Packet)) > 0) {
-                if (res.command == CMD_AUTH_RESULT) break;
+                
+                // 결과 패킷이면 루프 탈출
+                if (res.command == CMD_AUTH_RESULT) {
+                    break;
+                }
+                
+                // 방장인 경우, 서버가 "이 유저 저장해"라고 보낸 패킷 처리
+                else if (res.command == CMD_SAVE_USER) {
+                    char path[2048];
+                    snprintf(path, sizeof(path), "user_data/%s_userslog.txt", doc_name);
+                    
+                    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);
+                    if (fd != -1) {
+                        char line[200];
+                        sprintf(line, "%s %s\n", res.username, res.message);
+                        write(fd, line, strlen(line));
+                        close(fd);
+                        // 디버깅용 메시지 (필요 시 주석 해제)
+                        // mvprintw(HEIGHT/2 + 8, (WIDTH-40)/2, "[DEBUG] Saved to file locally.");
+                        // refresh();
+                    }
+                }
             }
 
             if (res.message[0] == '1') {
