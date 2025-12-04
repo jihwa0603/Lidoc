@@ -294,6 +294,8 @@ int main() {
                     run_network_text_editor(sock, username, 1, doc_name);
                     
                     kill(pid, SIGTERM); // 에디터 종료 시 서버도 종료
+
+                    break;
                 } else {
                     end_curses(); // 로그인 취소 시
                     close(sock);
@@ -329,6 +331,8 @@ int main() {
 
                 // 에디터 실행
                 run_network_text_editor(sock, username, 0, doc_name);
+
+                break;
             }
             close(sock);
 
@@ -339,5 +343,6 @@ int main() {
     }
     
     end_curses();
+    system("clear"); // [핵심] 터미널 화면을 깔끔하게 지움 (Linux/Mac)
     return 0;
 }

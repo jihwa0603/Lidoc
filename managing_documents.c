@@ -14,6 +14,7 @@
 #include "managing_documents.h"
 
 volatile int is_searching = 0;
+volatile int server_connected = 1; // 1: 연결됨, 0: 끊김
 int my_socket = -1;             // 서버와 연결된 소켓
 volatile int can_i_write = 0;            // 0: 읽기 전용, 1: 쓰기 가능
 char current_writer[MAX_NAME] = ""; // 지금 누가 쓰고 있는지
@@ -640,12 +641,13 @@ void *recv_thread_func(void *arg) {
         
         pthread_mutex_unlock(&win_mutex);
     }
+    server_connected = 0; 
     return NULL;
 }
 
 void run_network_text_editor(int socket_fd, char *username, int is_host, char *doc_name) {
     my_socket = socket_fd;
-
+    server_connected = 1; // 함수 시작 시 연결 상태 초기화
     strcpy(current_working_doc_name, doc_name);
 
     can_i_write = 0;              // 강제로 '읽기 모드'로 시작
@@ -708,6 +710,10 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
     timeout(100);
 
     while (1) {
+
+        if (server_connected == 0) {
+             break; // 루프 탈출 -> 종료 절차로 이동
+        }
 
         refresh();
 
@@ -821,6 +827,9 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
         free(users);
         users=NULL;
     }
+
+    endwin();       // ncurses 모드 종료
+    system("clear"); // 터미널 화면을 깔끔하게 지움 (Linux/Mac)
 
     endwin();
 }
