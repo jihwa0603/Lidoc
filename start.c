@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <dirent.h>
+#include <sys/types.h>
 
 #include "login.h"
 #include "server.h"
@@ -211,6 +212,31 @@ int connect_to_server(const char *ip, int port, const char *username, const char
     return 0;
 }
 
+
+
+int just_connect(const char *ip, int port) {
+    int sock;
+    struct sockaddr_in serv_addr;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        return -1;
+    }
+
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip, &serv_addr.sin_addr) <= 0) {
+        return -1;
+    }
+
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        return -1;
+    }
+
+    return sock;
+}
+
 int main() {
     // 폴더 설정
     manage_folder();
@@ -241,40 +267,41 @@ int main() {
             // 방장이므로 파일 목록(1) 보여줌
             get_connection_info(ip, &port, doc_name, 1); 
 
-            // 해당 방의 유저 DB 경로 생성
-            // 예: user_data/testdoc_userslog.txt
-            snprintf(db_path, sizeof(db_path), "user_data/%s_userslog.txt", doc_name);
-
-            // 로그인/회원가입 프로세스 실행
-            // 성공해야만(1 반환) 다음으로 넘어감
-            if (do_auth_process(db_path, username)) {
-
-                // 색 설정
-                start_curses(); 
-                process_login_and_color_selection(doc_name, username);
-                end_curses();
+            pid_t pid = fork();
+            if (pid == 0) {
+                // 자식: 서버 실행
+                run_server(port, 10); 
+                exit(0);
+            } else if (pid > 0) {
+                // 부모: 방장 클라이언트
+                sleep(1); // 서버 켜질 때까지 잠시 대기
                 
-                // 로그인 성공 후 서버 실행
-                pid_t pid = fork();
-                if (pid == 0) {
-                    // 자식: 서버
-                    int log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                    if (log_fd > 0) {
-                        dup2(log_fd, STDOUT_FILENO);
-                        dup2(log_fd, STDERR_FILENO);
-                        close(log_fd);
-                    }
-                    run_server(port, 10); 
-                    exit(0);
-                } else if (pid > 0) {
-                    // 부모: 클라이언트(방장)
-                    sleep(1); 
-                    connect_to_server("127.0.0.1", port, username, doc_name, 1);
+                // 2) 소켓 연결
+                int sock = just_connect("127.0.0.1", port);
+                if (sock < 0) {
+                    end_curses(); printf("Server Connection Failed!\n"); return 0;
+                }
+
+                // 3) [핵심] 내 로컬 DB 내용을 서버 메모리로 전송
+                send_db_file_to_server(sock, doc_name);
+
+                // 4) 로그인 수행 (서버와 통신)
+                start_curses();
+                if (network_login_process(sock, username)) {
+                    // 로그인 성공 -> 색상 선택 -> 에디터 실행
+                    process_login_and_color_selection(doc_name, username);
+                    end_curses();
+                    
+                    // 에디터 실행 (기존 소켓 사용)
+                    run_network_text_editor(sock, username, 1, doc_name);
+                    
                     kill(pid, SIGTERM); // 에디터 종료 시 서버도 종료
+                } else {
+                    end_curses(); // 로그인 취소 시
+                    close(sock);
+                    kill(pid, SIGTERM);
                 }
             }
-            // 로그인을 취소하거나 실패하면 다시 메뉴로 돌아감
-
         } else if (selection == 1) {
             // 서버에 연결
             char ip[30]; 
@@ -286,25 +313,26 @@ int main() {
             // 접속 정보 입력 (방 제목을 정확히 입력해야 로그인 가능)
             get_connection_info(ip, &port, doc_name, 0);
             
-            // 방 제목을 기반으로 DB 경로 설정
-            snprintf(db_path, sizeof(db_path), "user_data/%s_userslog.txt", doc_name);
+            // 1) 소켓 연결
+            int sock = just_connect(ip, port);
+            if (sock < 0) {
+                end_curses();
+                printf("Connection Failed!\n");
+                getchar();
+                continue;
+            }
 
-            // 로그인/회원가입 프로세스 실행
-            if (do_auth_process(db_path, username)) {
-
-                // 로그인 성공후 색상 선택
-                start_curses();
+            // 2) 로그인 수행 (서버 메모리와 통신, 로컬 파일 X)
+            start_curses();
+            if (network_login_process(sock, username)) {
+                // 로그인 성공
                 process_login_and_color_selection(doc_name, username);
                 end_curses();
 
-                // 로그인 성공 시 서버 접속
-                if (connect_to_server(ip, port, username, doc_name, 0) < 0) {
-                    end_curses();
-                    printf("Connection Failed!\n");
-                    getchar();
-                    default_start();
-                }
+                // 에디터 실행
+                run_network_text_editor(sock, username, 0, doc_name);
             }
+            close(sock);
 
         } else if (selection == 4) {
             // Exit

@@ -585,26 +585,53 @@ void *recv_thread_func(void *arg) {
             }
             doc_length = len;
         } else if (pkt.command == CMD_LOCK_GRANTED) {
+
             can_i_write = 1;
             char temp[100];
             snprintf(temp, sizeof(temp), "나(%s)", pkt.username);
             strcpy(current_writer, temp); 
+
         } else if (pkt.command == CMD_LOCK_DENIED) {
+
             mvprintw(LINES-1, 0, "거절됨: %s", pkt.message);
+
         } else if (pkt.command == CMD_RELEASE_LOCK) {
+
             save_document(current_working_doc_name, users, user_count);
             strcpy(current_writer, "");
             can_i_write = 0;
             mvprintw(0, 40, "[알림] %s님이 저장함 (내 파일도 업데이트됨)   ", pkt.username);
+
         } else if (pkt.command == CMD_INSERT) {
+
             server_insert_char(pkt.cursor_index, pkt.ch, pkt.username);
             if (pkt.cursor_index <= cursor_idx) cursor_idx++;
+
         } else if (pkt.command == CMD_DELETE) {
+
             server_delete_char(pkt.cursor_index);
             if (pkt.cursor_index < cursor_idx) cursor_idx--;
+
         }  else if (pkt.command == CMD_LOCK_UPDATE){
+
             strcpy(current_writer,pkt.username);
             can_i_write = 0;
+
+        } else if (pkt.command == CMD_SAVE_USER) {
+            char path[2048];
+            snprintf(path, sizeof(path), "user_data/%s_userslog.txt", current_working_doc_name);
+            
+            int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644); // write 전용, 이어쓰기
+            if (fd != -1) {
+                char line[200];
+                sprintf(line, "%s %s\n", pkt.username, pkt.message);
+                write(fd, line, strlen(line));
+                close(fd);
+                // 화면에 알림 (선택사항)
+                pthread_mutex_lock(&win_mutex);
+                mvprintw(0, 0, "[알림] 새 유저(%s)가 등록되어 파일에 저장했습니다.", pkt.username);
+                pthread_mutex_unlock(&win_mutex);
+            }
         }
 
         if (!is_searching) {
@@ -905,4 +932,48 @@ void process_login_and_color_selection(char *doc_name, char *username) {
     usleep(800000); 
 
     if(existing_users) free(existing_users);
+}
+
+void send_db_file_to_server(int sock, const char *filename) {
+    char path[4096];
+    snprintf(path, sizeof(path), "user_data/%s_userslog.txt", filename);
+
+    int fd = open(path, O_RDONLY); // fopen 대신 open
+    if (fd == -1) {
+        // 파일 없으면 생성만 해둠
+        fd = open(path, O_CREAT | O_RDWR, 0644);
+        close(fd);
+        return;
+    }
+
+    Packet pkt;
+    memset(&pkt, 0, sizeof(Packet));
+    pkt.command = CMD_LOAD_USERS;
+
+    // 파일 내용을 패킷 버퍼에 통째로 읽음
+    int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
+    if (len < 0) len = 0;
+    pkt.text_content[len] = '\0'; // 문자열 끝 처리
+    pkt.text_len = len;
+
+    write(sock, &pkt, sizeof(Packet));
+    close(fd);
+    printf("[HOST] 유저 로그 파일 서버로 전송 완료\n");
+}
+
+void send_doc_to_client(int sock) {
+    if (doc_length > 0) {
+        Packet sync_pkt;
+        memset(&sync_pkt, 0, sizeof(Packet));
+        sync_pkt.command = CMD_SYNC_ALL;
+        
+        // 서버 메모리(doc_buffer)에 있는 내용을 패킷에 담음
+        for(int i=0; i<doc_length; i++) {
+            sync_pkt.text_content[i] = doc_buffer[i].ch;
+            strcpy(sync_pkt.author_contents[i], doc_buffer[i].author);
+        }
+        sync_pkt.text_len = doc_length;
+        
+        write(sock, &sync_pkt, sizeof(Packet));
+    }
 }

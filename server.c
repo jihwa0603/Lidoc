@@ -26,6 +26,15 @@ void error_exit(const char *msg) {
     exit(EXIT_FAILURE);
 }
 
+typedef struct {
+    char id[20];
+    char pw[20]; // 해시된 문자열
+} UserInfo;
+
+UserInfo user_list[20]; // 최대 20명 가정
+int user_count_db = 0;
+int host_sock_fd = -1;  // 방장 소켓 번호 저장 (저장 요청 보낼 때 필요)
+
 // 모든 클라이언트에게 패킷 전송
 void send_to_all(Packet *pkt, int sender_sock) {
     pthread_mutex_lock(&mutx);
@@ -77,7 +86,82 @@ void *handle_client_thread(void *arg) {
     // 서버의 수신
     while ((bytes_read = read(client_sock, (void*)&pkt, sizeof(Packet))) > 0) {
 
-        if (pkt.command == CMD_SYNC_ALL) {
+        if (pkt.command == CMD_LOAD_USERS) {
+            host_sock_fd = client_sock; // DB를 보낸 사람이 곧 방장
+            user_count_db = 0;
+
+            // 텍스트 통으로 된거 파싱 (예: "user1 123\nuser2 456\n")
+            char *ptr = pkt.text_content;
+            char *line = strtok(ptr, "\n");
+            while (line != NULL && user_count_db < 20) {
+                sscanf(line, "%s %s", user_list[user_count_db].id, user_list[user_count_db].pw);
+                user_count_db++;
+                line = strtok(NULL, "\n");
+            }
+            printf("[SERVER] 유저 DB 로드 완료 (%d명)\n", user_count_db);
+        }
+
+        // 2. 로그인 요청
+        else if (pkt.command == CMD_AUTH_LOGIN) {
+            int success = 0;
+            for (int i = 0; i < user_count_db; i++) {
+                if (strcmp(user_list[i].id, pkt.username) == 0 && 
+                    strcmp(pkt.message, user_list[i].pw) == 0) { // msg에 비번 담겨옴
+                    success = 1;
+                    break;
+                }
+            }
+            
+            Packet res;
+            memset(&res, 0, sizeof(Packet));
+            res.command = CMD_AUTH_RESULT;
+            sprintf(res.message, "%d", success);
+            write(client_sock, &res, sizeof(Packet));
+
+            if (success) {
+                pthread_mutex_lock(&mutx);
+                send_doc_to_client(client_sock);
+                pthread_mutex_unlock(&mutx);
+            }
+        }
+
+        // 3. 회원가입 요청
+        else if (pkt.command == CMD_AUTH_REGISTER) {
+            int exists = 0;
+            for (int i = 0; i < user_count_db; i++) {
+                if (strcmp(user_list[i].id, pkt.username) == 0) {
+                    exists = 1;
+                    break;
+                }
+            }
+
+            Packet res;
+            memset(&res, 0, sizeof(Packet));
+            res.command = CMD_AUTH_RESULT;
+
+            if (exists) {
+                sprintf(res.message, "0"); // 실패
+            } else {
+                // 메모리에 추가
+                strcpy(user_list[user_count_db].id, pkt.username);
+                strcpy(user_list[user_count_db].pw, pkt.message);
+                user_count_db++;
+                sprintf(res.message, "1"); // 성공
+
+                // [중요] 방장에게 파일 저장 요청
+                if (host_sock_fd != -1) {
+                    Packet save_pkt;
+                    memset(&save_pkt, 0, sizeof(Packet));
+                    save_pkt.command = CMD_SAVE_USER;
+                    strcpy(save_pkt.username, pkt.username); // ID
+                    strcpy(save_pkt.message, pkt.message);   // PW
+                    write(host_sock_fd, &save_pkt, sizeof(Packet));
+                }
+            }
+            write(client_sock, &res, sizeof(Packet));
+        }
+
+        else if (pkt.command == CMD_SYNC_ALL) {
             // 방장이 보낸 문서 서버에 저장 (처음 방장이 지금 자신이 가진 문서 내용을 업로드)
             
             // 기존 문서 초기화
@@ -116,7 +200,7 @@ void *handle_client_thread(void *arg) {
 
                 sprintf(noti.message, "[잠금] %s님이 작성 중...", pkt.username);
 
-                send_to_all(&noti, -1); 
+                send_to_all(&noti, client_sock);
 
             } else {
                 // 이미 누가 쓰고 있음 -> 허나 거절한다!
@@ -234,7 +318,6 @@ void run_server(int port, int user_count) {
 
     // 서버 초기 설정
     server_sock = make_listening_socket(port, user_count);
-    printf("Multi-threaded Server listening on port %d\n", port);
 
     while (1) {
         client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_addr_len);

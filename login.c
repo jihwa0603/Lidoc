@@ -9,6 +9,9 @@
 #include <locale.h>
 
 #include "login.h"
+#include "managing_documents.h"
+#include "common_protocol.h"
+#include "server.h"
 
 #define MAX_USERNAME_LEN 15
 #define MAX_PASSWORD_LEN 15
@@ -198,8 +201,98 @@ void loginForm(const char *db_path, char *result_id) {
     free(buffer);
 }
 
+int network_login_process(int sock, char *username_out) {
+    char id[20];
+    char *pw_buf = malloc(20);
+    char hash_str[30];
+    int selection;
+
+    while (1) {
+        selection = ask_auth_menu(); // 0:로그인, 1:가입
+
+        clear();
+        draw_border();
+
+        if (selection == 0) { // === 로그인 ===
+            mvprintw(HEIGHT/2 - 4, (WIDTH-10)/2, "=== REMOTE LOGIN ===");
+            
+            // ID 입력
+            mvprintw(HEIGHT/2 - 1, WIDTH/2 - 10, "ID: ");
+            echo(); curs_set(1);
+            mvgetnstr(HEIGHT/2 - 1, WIDTH/2 - 5, id, 15);
+            noecho(); curs_set(0);
+
+            // PW 입력
+            mvprintw(HEIGHT/2 + 1, WIDTH/2 - 10, "PW: ");
+            get_pw(pw_buf, HEIGHT/2 + 1, WIDTH/2 - 5); // 기존 get_pw 함수 재사용
+            
+            // 해시 -> 문자열
+            unsigned long hashed = hash_password(pw_buf);
+            sprintf(hash_str, "%lu", hashed);
+
+            // 서버 전송
+            Packet pkt; memset(&pkt, 0, sizeof(Packet));
+            pkt.command = CMD_AUTH_LOGIN;
+            strcpy(pkt.username, id);
+            strcpy(pkt.message, hash_str);
+            write(sock, &pkt, sizeof(Packet));
+
+            // 결과 대기
+            Packet res;
+            while(read(sock, &res, sizeof(Packet)) > 0) {
+                if (res.command == CMD_AUTH_RESULT) break;
+            }
+
+            if (res.message[0] == '1') { // 성공
+                strcpy(username_out, id);
+                free(pw_buf);
+                mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Success!");
+                refresh(); sleep(1);
+                return 1;
+            } else {
+                mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Failed!");
+                getch();
+            }
+
+        } else { // === 회원가입 ===
+            mvprintw(HEIGHT/2 - 4, (WIDTH-16)/2, "=== REMOTE REGISTER ===");
+            
+            mvprintw(HEIGHT/2 - 1, WIDTH/2 - 10, "New ID: ");
+            echo(); curs_set(1);
+            mvgetnstr(HEIGHT/2 - 1, WIDTH/2 + 2, id, 15);
+            noecho(); curs_set(0);
+
+            mvprintw(HEIGHT/2 + 1, WIDTH/2 - 10, "New PW: ");
+            get_pw(pw_buf, HEIGHT/2 + 1, WIDTH/2 + 2);
+
+            unsigned long hashed = hash_password(pw_buf);
+            sprintf(hash_str, "%lu", hashed);
+
+            Packet pkt; memset(&pkt, 0, sizeof(Packet));
+            pkt.command = CMD_AUTH_REGISTER;
+            strcpy(pkt.username, id);
+            strcpy(pkt.message, hash_str);
+            write(sock, &pkt, sizeof(Packet));
+
+            Packet res;
+            while(read(sock, &res, sizeof(Packet)) > 0) {
+                if (res.command == CMD_AUTH_RESULT) break;
+            }
+
+            if (res.message[0] == '1') {
+                mvprintw(HEIGHT/2 + 4, (WIDTH-30)/2, "Register Success!");
+            } else {
+                mvprintw(HEIGHT/2 + 4, (WIDTH-30)/2, "Failed (ID Exists?)");
+            }
+            mvprintw(HEIGHT/2 + 6, (WIDTH-20)/2, "Press any key.");
+            getch();
+        }
+    }
+}
+
 // 로그인/회원가입 선택 메뉴
 int ask_auth_menu() {
+    curs_set(0);
     int selection = 0;
     while(1) {
         clear();
@@ -217,7 +310,7 @@ int ask_auth_menu() {
         int ch = getch();
         if (ch == KEY_UP) selection = 0;
         else if (ch == KEY_DOWN) selection = 1;
-        else if (ch == '\n' || ch == KEY_ENTER) return selection; // 0: Login, 1: Register
+        else if (ch == '\n' || ch == KEY_ENTER) curs_set(0); return selection; // 0: Login, 1: Register
     }
 }
 

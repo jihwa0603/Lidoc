@@ -14,7 +14,12 @@ typedef enum {
     CMD_LOCK_GRANTED,
     CMD_LOCK_DENIED,
     CMD_LOCK_UPDATE,
-    CMD_SYNC_ALL
+    CMD_SYNC_ALL,
+    CMD_LOAD_USERS,        // 방장 -> 서버 (DB 내용 전송)
+    CMD_AUTH_LOGIN,        // 게스트 -> 서버 (로그인 시도)
+    CMD_AUTH_REGISTER,     // 게스트 -> 서버 (회원가입 시도)
+    CMD_AUTH_RESULT,       // 서버 -> 게스트 (성공/실패 결과)
+    CMD_SAVE_USER
 } CommandType;
 
 typedef struct {
