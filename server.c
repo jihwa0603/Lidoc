@@ -35,6 +35,46 @@ UserInfo user_list[20]; // 최대 20명 가정
 int user_count_db = 0;
 int host_sock_fd = -1;  // 방장 소켓 번호 저장 (저장 요청 보낼 때 필요)
 
+typedef struct {
+    char ch;
+    char author[20];
+} ServerCell; // 이름 충돌 방지를 위해 임시로 구조체 정의 혹은 기존 Cell 사용
+
+// 만약 Cell 구조체가 헤더에 있다면 그대로 쓰시고, 없으면 위처럼 정의하세요.
+// 여기서는 헤더에 Cell이 있다고 가정하고 작성합니다.
+Cell server_doc_buffer[MAX_BUFFER]; // 이름 변경
+int server_doc_length = 0;          // 이름 변경
+
+// [필수] 서버 메모리 업데이트용 함수 (ncurses 기능 뺀 순수 로직)
+void server_update_insert(int index, char ch, const char *username) {
+    // 범위 체크
+    if (index < 0 || index > doc_length || doc_length >= MAX_BUFFER - 1) return;
+
+    // 뒤로 한 칸씩 밀기
+    for (int i = doc_length; i > index; i--) {
+        doc_buffer[i] = doc_buffer[i - 1];
+    }
+
+    // 데이터 삽입
+    doc_buffer[index].ch = ch;
+    strcpy(doc_buffer[index].author, username);
+    doc_length++;
+    
+    // printf("[DEBUG] Server Memory Updated: Insert '%c' at %d (Len: %d)\n", ch, index, doc_length);
+}
+
+void server_update_delete(int index) {
+    if (index < 0 || index >= doc_length) return;
+
+    // 앞으로 한 칸씩 당기기
+    for (int i = index; i < doc_length - 1; i++) {
+        doc_buffer[i] = doc_buffer[i + 1];
+    }
+    doc_length--;
+    
+    // printf("[DEBUG] Server Memory Updated: Delete at %d (Len: %d)\n", index, doc_length);
+}
+
 // 모든 클라이언트에게 패킷 전송
 void send_to_all(Packet *pkt, int sender_sock) {
     pthread_mutex_lock(&mutx);
@@ -231,10 +271,18 @@ void *handle_client_thread(void *arg) {
         } else if (pkt.command == CMD_INSERT || pkt.command == CMD_DELETE) {
             // 실제 작성 요청: 권한 있는 사람인지 한 번 더 체크 (보안)
             if (current_writer_sock == client_sock) {
-                if (pkt.command == CMD_INSERT) server_insert_char(pkt.cursor_index, pkt.ch, pkt.username);
-                else server_delete_char(pkt.cursor_index);
-                
-                // 변경 사항 방송
+                pthread_mutex_lock(&mutx); // 서버 메모리 건드리니까 뮤텍스 잠금
+
+                // [핵심 추가] 서버의 메모리(doc_buffer)도 똑같이 업데이트한다!
+                if (pkt.command == CMD_INSERT) {
+                    server_update_insert(pkt.cursor_index, pkt.ch, pkt.username);
+                } else {
+                    server_update_delete(pkt.cursor_index);
+                }
+
+                pthread_mutex_unlock(&mutx);
+
+                // 그 다음 다른 사람들에게 전송 (작성자 본인 제외)
                 send_to_all(&pkt, -1);
             }
         }
