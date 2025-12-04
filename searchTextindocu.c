@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ncurses.h>
 #include "managing_documents.h"
+#include "searchTextindocu.h"
 #define LINES 30
 #define COLS 120
 #define MAX_RESULTS 100
@@ -145,12 +146,12 @@ void display_result(char* search_text,const char *filename){
 
         refresh();
         //key 입력 처리
-        int ch = getch();
-        if (ch == KEY_RIGHT) {
-            index = (index + 1) % result_count;
-        } else if (ch == KEY_LEFT) {
-            index = (index - 1) % result_count;
-        } else if (ch == 'q' || ch == 'Q') {
+        int ch=getch();
+        if (ch==KEY_RIGHT) {
+            index=(index+1)%result_count;
+        } else if (ch==KEY_LEFT) {
+            index=(index-1+result_count)%result_count;
+        } else if (ch=='q'||ch=='Q') {
             break;
         }
     }

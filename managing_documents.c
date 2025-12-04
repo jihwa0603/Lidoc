@@ -9,10 +9,11 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <locale.h>
-
+#include "searchTextindocu.h"
 #include "common_protocol.h"
 #include "managing_documents.h"
 
+volatile int is_searching = 0;
 int my_socket = -1;             // 서버와 연결된 소켓
 volatile int can_i_write = 0;            // 0: 읽기 전용, 1: 쓰기 가능
 char current_writer[MAX_NAME] = ""; // 지금 누가 쓰고 있는지
@@ -541,9 +542,9 @@ void draw_document(const char *my_username) {
         attroff(COLOR_PAIR(1));
     } else {
         attron(COLOR_PAIR(8)); // 흰배경 검은글씨 (읽기 모드)
-        mvprintw(0, 0, "[읽기 모드] 엔터(Enter)를 누르면 작성 권한 요청");
+        mvprintw(0, 0, "[읽기 모드] 엔터(Enter)를 누르면 작성 권한 요청 (검색: F)");
         if (strlen(current_writer) > 0) {
-            mvprintw(0, 50, "현재 작성자: %s", current_writer);
+            mvprintw(0, 60, "현재 작성자: %s", current_writer);
         }
         attroff(COLOR_PAIR(8));
     }
@@ -574,53 +575,38 @@ void *recv_thread_func(void *arg) {
     while (read(my_socket, &pkt, sizeof(Packet)) > 0) {
         pthread_mutex_lock(&win_mutex); 
 
-        // 처음 동기화 명령
         if (pkt.command == CMD_SYNC_ALL) {
             doc_length = 0;
             int len = pkt.text_len;
             if (len > MAX_BUFFER) len = MAX_BUFFER;
-
             for (int i = 0; i < len; i++) {
                 doc_buffer[i].ch = pkt.text_content[i];
                 strcpy(doc_buffer[i].author, pkt.author_contents[i]);
             }
             doc_length = len;
-            
-        // 내가 작성 권한을 얻었음
         } else if (pkt.command == CMD_LOCK_GRANTED) {
             can_i_write = 1;
             char temp[100];
             snprintf(temp, sizeof(temp), "나(%s)", pkt.username);
-            if (strlen(pkt.username) == 0){
-
-            }
             strcpy(current_writer, temp); 
-            
         } else if (pkt.command == CMD_LOCK_DENIED) {
             mvprintw(LINES-1, 0, "거절됨: %s", pkt.message);
-
         } else if (pkt.command == CMD_RELEASE_LOCK) {
-            
-            // 내 컴퓨터(로컬)에 현재 내용을 저장
             save_document(current_working_doc_name, users, user_count);
-            
-            // 잠금 상태 해제 (UI 업데이트)
             strcpy(current_writer, "");
             can_i_write = 0;
-            
-            // 알림 표시
             mvprintw(0, 40, "[알림] %s님이 저장함 (내 파일도 업데이트됨)   ", pkt.username);
-
         } else if (pkt.command == CMD_INSERT) {
             server_insert_char(pkt.cursor_index, pkt.ch, pkt.username);
             if (pkt.cursor_index <= cursor_idx) cursor_idx++;
-            
         } else if (pkt.command == CMD_DELETE) {
             server_delete_char(pkt.cursor_index);
             if (pkt.cursor_index < cursor_idx) cursor_idx--;
         }
 
-        draw_document(pkt.username);
+        if (!is_searching) {
+            draw_document(pkt.username);
+        }
         
         pthread_mutex_unlock(&win_mutex);
     }
@@ -697,9 +683,10 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
 
         // 키 입력 전 화면 갱신 (로컬 이동 반영을 위해)
         pthread_mutex_lock(&win_mutex);
-        draw_document(username);
+        if (!is_searching) {
+            draw_document(username);
+        }
         pthread_mutex_unlock(&win_mutex);
-
         // 키 입력
         ch = getch(); 
         if(ch == ERR){
@@ -779,13 +766,30 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
             } else if (ch == 'q') { 
                 timeout(-1);
                 break; 
+            }else if (ch=='f'||ch=='F') {
+                pthread_mutex_lock(&win_mutex);
+                is_searching=1;
+                pthread_mutex_unlock(&win_mutex);
+
+                save_document(doc_name,users,user_count);
+                char search_filename[MAX_PATH];
+                snprintf(search_filename,sizeof(search_filename),"%s.txt",doc_name);
+                create_question_box(search_filename);
+
+                pthread_mutex_lock(&win_mutex);
+                is_searching=0; 
+                clear();          
+                timeout(100);     
+                curs_set(1);     
+                draw_document(username);
+                pthread_mutex_unlock(&win_mutex);
             }
         }
     }
 
-    if(users != NULL) {
+    if(users!=NULL) {
         free(users);
-        users = NULL;
+        users=NULL;
     }
 
     endwin();
