@@ -106,6 +106,7 @@ void *handle_client_thread(void *arg) {
                 // 요청한 사람에게 승인 패킷 전송
                 Packet response;
                 response.command = CMD_LOCK_GRANTED;
+                strcpy(response.username,pkt.username);
                 write(client_sock, &response, sizeof(Packet));
 
                 // 다른 사람들에게 "A가 쓰는 중이다"라고 알림

@@ -602,6 +602,9 @@ void *recv_thread_func(void *arg) {
         } else if (pkt.command == CMD_DELETE) {
             server_delete_char(pkt.cursor_index);
             if (pkt.cursor_index < cursor_idx) cursor_idx--;
+        }  else if (pkt.command == CMD_LOCK_UPDATE){
+            strcpy(current_writer,pkt.username);
+            can_i_write = 0;
         }
 
         if (!is_searching) {
