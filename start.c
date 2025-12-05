@@ -285,7 +285,6 @@ int main() {
 
                 // 로그인 수행 (서버와 통신)
                 start_curses();
-                flushinp();
                 if (network_login_process(sock, username, doc_name)) {
                     // 로그인 성공 -> 색상 선택 -> 에디터 실행
                     process_login_and_color_selection(doc_name, username);
@@ -325,7 +324,6 @@ int main() {
 
             // 로그인 수행 (서버 메모리와 통신, 로컬 파일 X)
             start_curses();
-            flushinp();
             if (network_login_process(sock, username, doc_name)) {
                 // 로그인 성공
                 process_login_and_color_selection(doc_name, username);
