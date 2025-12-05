@@ -315,10 +315,10 @@ int network_login_process(int sock, char *username_out, char* doc_name) {
 int ask_auth_menu() {
     curs_set(0);
     int selection = 0;
+    flushinp();
     while(1) {
         clear();
         draw_border();
-        flushinp();
         mvprintw(HEIGHT/2 - 3, (WIDTH-24)/2, "=== Authentication ===");
         
         if(selection == 0) attron(A_REVERSE);
