@@ -318,6 +318,7 @@ int ask_auth_menu() {
     while(1) {
         clear();
         draw_border();
+        flushinp();
         mvprintw(HEIGHT/2 - 3, (WIDTH-24)/2, "=== Authentication ===");
         
         if(selection == 0) attron(A_REVERSE);
@@ -331,7 +332,10 @@ int ask_auth_menu() {
         int ch = getch();
         if (ch == KEY_UP) selection = 0;
         else if (ch == KEY_DOWN) selection = 1;
-        else if (ch == '\n' || ch == KEY_ENTER) curs_set(0); return selection; // 0: Login, 1: Register
+        else if (ch == '\n' || ch == KEY_ENTER) {
+            curs_set(0);
+            return selection; // 0: Login, 1: Register
+        }  
     }
 }
 
