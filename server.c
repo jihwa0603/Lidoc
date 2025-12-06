@@ -286,7 +286,10 @@ void *handle_client_thread(void *arg) {
                 // 그 다음 다른 사람들에게 전송 (작성자 본인 제외)
                 send_to_all(&pkt, -1);
             }
-        } 
+        }  else if (pkt.command == CMD_UPDATE_COLOR) {
+            // 받은 색상 정보를 다른 모든 사람에게 전송 (본인 제외 혹은 포함 상관없음)
+            send_to_all(&pkt, client_sock);
+        }
         
         pthread_mutex_unlock(&mutx);
     }

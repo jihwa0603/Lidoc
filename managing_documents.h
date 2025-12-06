@@ -55,7 +55,7 @@ void free_persons(Person *people, int count);
 void server_insert_char(int index, char ch, const char *username);
 void server_delete_char(int index);
 void run_network_text_editor(int socket_fd, char *username, int is_host, char *doc_name);
-void process_login_and_color_selection(char *doc_name, char *username);
+void process_login_and_color_selection(int socket_fd, char *doc_name, char *username);
 void send_db_file_to_server(int sock, const char *filename);
 void send_doc_to_client(int sock);
 

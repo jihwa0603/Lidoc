@@ -637,6 +637,17 @@ void *recv_thread_func(void *arg) {
             // 방금 저장한 파일에서 최신 명단을 다시 불러옴
             users = read_persons(current_working_doc_name, &user_count);
             
+        } else if (pkt.command == CMD_UPDATE_COLOR) {
+            
+            // (register_person은 append 모드라 파일이 있으면 끝에 추가됨)
+            register_person(current_working_doc_name, pkt.username, pkt.message);
+
+            // 메모리 싹 비우고 파일에서 다시 불러오기
+            if (users != NULL) {
+                free(users);
+                users = NULL;
+            }
+            users = read_persons(current_working_doc_name, &user_count);
         }
 
         if (!is_searching) {
@@ -849,7 +860,7 @@ int is_color_taken(const char *color, Person *people, int count) {
 }
 
 // 색상 선택 및 사용자 등록을 처리
-void process_login_and_color_selection(char *doc_name, char *username) {
+void process_login_and_color_selection(int socket_fd, char *doc_name, char *username) {
     int user_count = 0;
     Person *existing_users = read_persons(doc_name, &user_count);
     
@@ -892,6 +903,13 @@ void process_login_and_color_selection(char *doc_name, char *username) {
     // 만약 남은 색상이 없다면 기본값(white)으로 자동 등록 (중복 허용)
     if (avail_count == 0) {
         register_person(doc_name, username, "white");
+
+        Packet pkt;
+        memset(&pkt, 0, sizeof(Packet));
+        pkt.command = CMD_UPDATE_COLOR;
+        strcpy(pkt.username, username);
+        strcpy(pkt.message, "white"); // message에 색상 넣기
+        write(socket_fd, &pkt, sizeof(Packet));
         if(existing_users) free(existing_users);
         clear();
         mvprintw(LINES/2, (COLS-50)/2, "All colors taken. Auto-registered as White.");
@@ -938,6 +956,13 @@ void process_login_and_color_selection(char *doc_name, char *username) {
 
     // 선택한 색상으로 파일에 등록
     register_person(doc_name, username, available_colors[selected_idx]);
+
+    Packet pkt;
+    memset(&pkt, 0, sizeof(Packet));
+    pkt.command = CMD_UPDATE_COLOR;
+    strcpy(pkt.username, username);
+    strcpy(pkt.message, available_colors[selected_idx]); 
+    write(socket_fd, &pkt, sizeof(Packet));
     
     clear();
     mvprintw(LINES/2, (COLS-40)/2, "Registered successfully as %s!", available_colors[selected_idx]);

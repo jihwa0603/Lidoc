@@ -287,7 +287,7 @@ int main() {
                 start_curses();
                 if (network_login_process(sock, username, doc_name)) {
                     // 로그인 성공 -> 색상 선택 -> 에디터 실행
-                    process_login_and_color_selection(doc_name, username);
+                    process_login_and_color_selection(sock, doc_name, username);
                     end_curses();
                     
                     // 에디터 실행 (기존 소켓 사용)
@@ -326,7 +326,7 @@ int main() {
             start_curses();
             if (network_login_process(sock, username, doc_name)) {
                 // 로그인 성공
-                process_login_and_color_selection(doc_name, username);
+                process_login_and_color_selection(sock, doc_name, username);
                 end_curses();
 
                 // 에디터 실행

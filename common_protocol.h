@@ -19,7 +19,8 @@ typedef enum {
     CMD_AUTH_LOGIN,        // 게스트 -> 서버 (로그인 시도)
     CMD_AUTH_REGISTER,     // 게스트 -> 서버 (회원가입 시도)
     CMD_AUTH_RESULT,       // 서버 -> 게스트 (성공/실패 결과)
-    CMD_SAVE_USER
+    CMD_SAVE_USER,
+    CMD_UPDATE_COLOR
 } CommandType;
 
 typedef struct {
