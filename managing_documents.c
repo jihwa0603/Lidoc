@@ -628,11 +628,15 @@ void *recv_thread_func(void *arg) {
                 sprintf(line, "%s %s\n", pkt.username, pkt.message);
                 write(fd, line, strlen(line));
                 close(fd);
-                // 화면에 알림 (선택사항)
-                pthread_mutex_lock(&win_mutex);
-                mvprintw(0, 0, "[알림] 새 유저(%s)가 등록되어 파일에 저장했습니다.", pkt.username);
-                pthread_mutex_unlock(&win_mutex);
             }
+            
+            if (users != NULL) {
+                free(users); // 기존 목록 삭제
+                users = NULL;
+            }
+            // 방금 저장한 파일에서 최신 명단을 다시 불러옴
+            users = read_persons(current_working_doc_name, &user_count);
+            
         }
 
         if (!is_searching) {
@@ -955,7 +959,7 @@ void send_db_file_to_server(int sock, const char *filename) {
     pkt.command = CMD_LOAD_USERS;
 
     if (fd == -1) {
-        // [수정] 파일이 없으면 새로 생성만 하고, 읽기 과정은 건너뜀 (내용은 비어있음)
+        // 파일이 없으면 새로 생성만 하고, 읽기 과정은 건너뜀 (내용은 비어있음)
         // 하지만 패킷 전송 로직은 수행해야 함!
         int new_fd = open(path, O_CREAT | O_RDWR, 0644);
         if (new_fd != -1) close(new_fd);
@@ -963,7 +967,6 @@ void send_db_file_to_server(int sock, const char *filename) {
         pkt.text_len = 0;
         pkt.text_content[0] = '\0';
         
-        printf("[HOST] 기존 DB 없음. 새 파일 생성 후 빈 DB 전송.\n");
     } else {
         // 파일이 있으면 읽어서 패킷에 담음
         int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
@@ -975,7 +978,7 @@ void send_db_file_to_server(int sock, const char *filename) {
         printf("[HOST] 기존 유저 DB 로드하여 전송 (len: %d)\n", len);
     }
 
-    // [중요] 파일 유무와 상관없이 이 write가 실행되어야 함
+    // 파일 유무와 상관없이 이 write가 실행되어야 함
     write(sock, &pkt, sizeof(Packet));
 }
 

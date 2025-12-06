@@ -196,6 +196,7 @@ void *handle_client_thread(void *arg) {
                     strcpy(save_pkt.username, pkt.username); // ID
                     strcpy(save_pkt.message, pkt.message);   // PW
                     write(host_sock_fd, &save_pkt, sizeof(Packet));
+                    usleep(50000); // 0.05초 대기
                 }
             }
             write(client_sock, &res, sizeof(Packet));
@@ -285,7 +286,7 @@ void *handle_client_thread(void *arg) {
                 // 그 다음 다른 사람들에게 전송 (작성자 본인 제외)
                 send_to_all(&pkt, -1);
             }
-        }
+        } 
         
         pthread_mutex_unlock(&mutx);
     }
@@ -313,7 +314,6 @@ void *handle_client_thread(void *arg) {
         }
     }
     client_count--; // 접속 인원 감소
-    printf("Client disconnected. Current users: %d\n", client_count);
 
     pthread_mutex_unlock(&mutx);
 
