@@ -21,6 +21,8 @@ pthread_mutex_t mutx;
 int current_writer_sock = -1; // 현재 작성 중인 사람의 소켓 (-1이면 아무도 안 쓰고 있음)
 char current_writer_name[20] = "";
 
+char color_db_buffer[MAX_BUFFER] = "";
+
 void error_exit(const char *msg) {
     perror(msg);
     exit(EXIT_FAILURE);
@@ -161,8 +163,22 @@ void *handle_client_thread(void *arg) {
             if (success) {
                 pthread_mutex_lock(&mutx);
                 send_doc_to_client(client_sock);
+
+                if (strlen(color_db_buffer) > 0) {
+                    Packet db_pkt;
+                    memset(&db_pkt, 0, sizeof(Packet));
+                    db_pkt.command = CMD_SYNC_USER_DB;
+                    strcpy(db_pkt.text_content, color_db_buffer); // 저장해둔 명단 담기
+                    db_pkt.text_len = strlen(color_db_buffer);
+                    write(client_sock, &db_pkt, sizeof(Packet));
+                }
                 pthread_mutex_unlock(&mutx);
             }
+        } else if (pkt.command == CMD_SYNC_USER_DB) {
+            pthread_mutex_lock(&mutx);
+            // 서버 메모리에 덮어쓰기 (초기화)
+            strcpy(color_db_buffer, pkt.text_content);
+            pthread_mutex_unlock(&mutx);
         }
 
         // 3. 회원가입 요청
@@ -287,8 +303,16 @@ void *handle_client_thread(void *arg) {
                 send_to_all(&pkt, -1);
             }
         }  else if (pkt.command == CMD_UPDATE_COLOR) {
-            // 받은 색상 정보를 다른 모든 사람에게 전송 (본인 제외 혹은 포함 상관없음)
-            send_to_all(&pkt, client_sock);
+            // 받은 색상 정보를 다른 모든 사람에게 전송 
+            send_to_all(&pkt, -1);
+
+            char new_entry[256];
+            snprintf(new_entry, sizeof(new_entry), "%s %s 0\n", pkt.username, pkt.message);
+            
+            // 버퍼 오버플로우 방지 체크 후 추가
+            if (strlen(color_db_buffer) + strlen(new_entry) < MAX_BUFFER) {
+                strcat(color_db_buffer, new_entry);
+            }
         }
         
         pthread_mutex_unlock(&mutx);

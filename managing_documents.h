@@ -58,5 +58,6 @@ void run_network_text_editor(int socket_fd, char *username, int is_host, char *d
 void process_login_and_color_selection(int socket_fd, char *doc_name, char *username);
 void send_db_file_to_server(int sock, const char *filename);
 void send_doc_to_client(int sock);
+void send_color_db_to_server(int sock, const char *doc_name);
 
 #endif // MANAGING_DOCUMENTS_H

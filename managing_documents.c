@@ -570,6 +570,30 @@ void draw_document(const char *my_username) {
     refresh();
 }
 
+void send_color_db_to_server(int sock, const char *doc_name) {
+    char path[MAX_PATH];
+    snprintf(path, sizeof(path), "user_data/%s_users.txt", doc_name);
+    
+    int fd = open(path, O_RDONLY);
+    Packet pkt;
+    memset(&pkt, 0, sizeof(Packet));
+    pkt.command = CMD_SYNC_USER_DB;
+
+    if (fd != -1) {
+        // 파일 읽어서 패킷에 담기
+        int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
+        if (len < 0) len = 0;
+        pkt.text_content[len] = '\0';
+        pkt.text_len = len;
+        close(fd);
+    } else {
+        pkt.text_len = 0; // 파일 없으면 빈 내용 전송 (초기화)
+    }
+
+    write(sock, &pkt, sizeof(Packet));
+    printf("[HOST] Sent User Color DB to Server.\n");
+}
+
 void *recv_thread_func(void *arg) {
     Packet pkt;
     
@@ -648,6 +672,25 @@ void *recv_thread_func(void *arg) {
                 users = NULL;
             }
             users = read_persons(current_working_doc_name, &user_count);
+        } else if (pkt.command == CMD_SYNC_USER_DB) {
+            
+            // 로컬 파일(user_data/xxx_users.txt)에 덮어쓰기
+            char path[MAX_PATH + 50];
+            snprintf(path, sizeof(path), "user_data/%s_users.txt", current_working_doc_name);
+            
+            int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644); // TRUNC로 내용 싹 지우고 새로 씀
+            if (fd != -1) {
+                write(fd, pkt.text_content, pkt.text_len);
+                close(fd);
+            }
+
+            // 메모리 리로드 (화면 갱신용)
+            if (users != NULL) {
+                free(users);
+                users = NULL;
+            }
+            users = read_persons(current_working_doc_name, &user_count);
+            
         }
 
         if (!is_searching) {
