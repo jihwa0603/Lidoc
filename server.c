@@ -40,14 +40,11 @@ int host_sock_fd = -1;  // 방장 소켓 번호 저장 (저장 요청 보낼 때
 typedef struct {
     char ch;
     char author[20];
-} ServerCell; // 이름 충돌 방지를 위해 임시로 구조체 정의 혹은 기존 Cell 사용
+} ServerCell;
 
-// 만약 Cell 구조체가 헤더에 있다면 그대로 쓰시고, 없으면 위처럼 정의하세요.
-// 여기서는 헤더에 Cell이 있다고 가정하고 작성합니다.
-Cell server_doc_buffer[MAX_BUFFER]; // 이름 변경
-int server_doc_length = 0;          // 이름 변경
+Cell server_doc_buffer[MAX_BUFFER]; 
+int server_doc_length = 0;         
 
-// [필수] 서버 메모리 업데이트용 함수 (ncurses 기능 뺀 순수 로직)
 void server_update_insert(int index, char ch, const char *username) {
     // 범위 체크
     if (index < 0 || index > doc_length || doc_length >= MAX_BUFFER - 1) return;
@@ -62,7 +59,6 @@ void server_update_insert(int index, char ch, const char *username) {
     strcpy(doc_buffer[index].author, username);
     doc_length++;
     
-    // printf("[DEBUG] Server Memory Updated: Insert '%c' at %d (Len: %d)\n", ch, index, doc_length);
 }
 
 void server_update_delete(int index) {
@@ -74,14 +70,12 @@ void server_update_delete(int index) {
     }
     doc_length--;
     
-    // printf("[DEBUG] Server Memory Updated: Delete at %d (Len: %d)\n", index, doc_length);
 }
 
 // 모든 클라이언트에게 패킷 전송
 void send_to_all(Packet *pkt, int sender_sock) {
     pthread_mutex_lock(&mutx);
     for (int i = 0; i < client_count; i++) {
-        // sender_sock가 -1이면 조건 없이 모두에게 보냄, 아니면 그 사람을 제외하고 보냄 -> 이제는 필요없지만 혹시나 싶은 에러 방지용으로 일단 삭제는 안했음
         if (sender_sock == -1 || client_sockets[i] != sender_sock) {
             write(client_sockets[i], (void*)pkt, sizeof(Packet));
         }
@@ -132,7 +126,6 @@ void *handle_client_thread(void *arg) {
             host_sock_fd = client_sock; // DB를 보낸 사람이 곧 방장
             user_count_db = 0;
 
-            // 텍스트 통으로 된거 파싱 (예: "user1 123\nuser2 456\n")
             char *ptr = pkt.text_content;
             char *line = strtok(ptr, "\n");
             while (line != NULL && user_count_db < 20) {
@@ -143,7 +136,7 @@ void *handle_client_thread(void *arg) {
             printf("[SERVER] 유저 DB 로드 완료 (%d명)\n", user_count_db);
         }
 
-        // 2. 로그인 요청
+        // 로그인 요청
         else if (pkt.command == CMD_AUTH_LOGIN) {
             int success = 0;
             for (int i = 0; i < user_count_db; i++) {
@@ -181,7 +174,7 @@ void *handle_client_thread(void *arg) {
             pthread_mutex_unlock(&mutx);
         }
 
-        // 3. 회원가입 요청
+        // 회원가입 요청
         else if (pkt.command == CMD_AUTH_REGISTER) {
             int exists = 0;
             for (int i = 0; i < user_count_db; i++) {
@@ -204,7 +197,7 @@ void *handle_client_thread(void *arg) {
                 user_count_db++;
                 sprintf(res.message, "1"); // 성공
 
-                // [중요] 방장에게 파일 저장 요청
+                // 방장에게 파일 저장 요청
                 if (host_sock_fd != -1) {
                     Packet save_pkt;
                     memset(&save_pkt, 0, sizeof(Packet));
@@ -288,9 +281,8 @@ void *handle_client_thread(void *arg) {
         } else if (pkt.command == CMD_INSERT || pkt.command == CMD_DELETE) {
             // 실제 작성 요청: 권한 있는 사람인지 한 번 더 체크 (보안)
             if (current_writer_sock == client_sock) {
-                pthread_mutex_lock(&mutx); // 서버 메모리 건드리니까 뮤텍스 잠금
+                pthread_mutex_lock(&mutx);
 
-                // [핵심 추가] 서버의 메모리(doc_buffer)도 똑같이 업데이트한다!
                 if (pkt.command == CMD_INSERT) {
                     server_update_insert(pkt.cursor_index, pkt.ch, pkt.username);
                 } else {
@@ -299,7 +291,6 @@ void *handle_client_thread(void *arg) {
 
                 pthread_mutex_unlock(&mutx);
 
-                // 그 다음 다른 사람들에게 전송 (작성자 본인 제외)
                 send_to_all(&pkt, -1);
             }
         }  else if (pkt.command == CMD_UPDATE_COLOR) {

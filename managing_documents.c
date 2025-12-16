@@ -481,8 +481,6 @@ void move_cursor_vertically(int direction) {
     int best_idx = -1;
     int min_dist = 99999; 
 
-    // 문서 전체를 순회하며 목표 위치 찾기 (문서가 크지 않으므로 가능)
-    // 최적화를 원한다면 현재 인덱스 위주로 탐색 범위를 좁힐 수 있음
     for (int i = 0; i <= doc_length; i++) {
         int temp_y, temp_x;
         get_screen_pos(i, &temp_y, &temp_x);
@@ -493,7 +491,7 @@ void move_cursor_vertically(int direction) {
                 min_dist = dist;
                 best_idx = i;
             }
-            // 같은 줄에서 x좌표가 멀어지기 시작하면 루프 중단 (최적화)
+            // 같은 줄에서 x좌표가 멀어지기 시작하면 루프 중단
             else if (dist > min_dist) {
                  break; 
             }
@@ -663,7 +661,6 @@ void *recv_thread_func(void *arg) {
             
         } else if (pkt.command == CMD_UPDATE_COLOR) {
             
-            // (register_person은 append 모드라 파일이 있으면 끝에 추가됨)
             register_person(current_working_doc_name, pkt.username, pkt.message);
 
             // 메모리 싹 비우고 파일에서 다시 불러오기
@@ -674,11 +671,10 @@ void *recv_thread_func(void *arg) {
             users = read_persons(current_working_doc_name, &user_count);
         } else if (pkt.command == CMD_SYNC_USER_DB) {
             
-            // 로컬 파일(user_data/xxx_users.txt)에 덮어쓰기
             char path[MAX_PATH + 50];
             snprintf(path, sizeof(path), "user_data/%s_users.txt", current_working_doc_name);
             
-            int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644); // TRUNC로 내용 싹 지우고 새로 씀
+            int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644); 
             if (fd != -1) {
                 write(fd, pkt.text_content, pkt.text_len);
                 close(fd);
@@ -1027,8 +1023,6 @@ void send_db_file_to_server(int sock, const char *filename) {
     pkt.command = CMD_LOAD_USERS;
 
     if (fd == -1) {
-        // 파일이 없으면 새로 생성만 하고, 읽기 과정은 건너뜀 (내용은 비어있음)
-        // 하지만 패킷 전송 로직은 수행해야 함!
         int new_fd = open(path, O_CREAT | O_RDWR, 0644);
         if (new_fd != -1) close(new_fd);
         
@@ -1039,7 +1033,7 @@ void send_db_file_to_server(int sock, const char *filename) {
         // 파일이 있으면 읽어서 패킷에 담음
         int len = read(fd, pkt.text_content, MAX_BUFFER - 1);
         if (len < 0) len = 0;
-        pkt.text_content[len] = '\0'; // 문자열 끝 처리
+        pkt.text_content[len] = '\0';
         pkt.text_len = len;
         
         close(fd);

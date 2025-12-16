@@ -254,14 +254,12 @@ int main() {
         int selection = show_the_list(); // 메뉴 선택
 
         if (selection == 0) { 
-            // 1. Server Start (Host Mode)
             char ip[30]; 
             int port;
             char doc_name[30];
             char username[20];
             char db_path[100];
 
-            // 설정 정보 입력 (IP는 127.0.0.1, Port, 문서명)
             // 방장이므로 파일 목록(1) 보여줌
             get_connection_info(ip, &port, doc_name, 1); 
 

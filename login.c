@@ -15,7 +15,7 @@
 
 #define MAX_USERNAME_LEN 15
 #define MAX_PASSWORD_LEN 15
-#define MAX_USERS 10  // 최대 유저 수 제한
+#define MAX_USERS 10
 
 int WIDTH, HEIGHT;
 int loginFlag = 0;
@@ -93,7 +93,7 @@ int get_user_count(const char *filename) {
 
 // 회원가입 폼
 void RegisterForm(const char *db_path) {
-    // 1. 인원 제한 체크
+    // 인원 제한 체크
     int count = get_user_count(db_path);
     if (count >= MAX_USERS) {
         clear();
@@ -129,7 +129,7 @@ void RegisterForm(const char *db_path) {
     sprintf(buf, "%s %lu\n", t1.id, hashed_pw);
 
     // 파일 열기 (없으면 생성)
-    int fid = open(db_path, O_WRONLY | O_CREAT | O_APPEND, 0644); // 0700 -> 0644 (일반권한)
+    int fid = open(db_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fid == -1) {
         endwin();
         perror("File Open Error");
@@ -293,9 +293,6 @@ int network_login_process(int sock, char *username_out, char* doc_name) {
                         sprintf(line, "%s %s\n", res.username, res.message);
                         write(fd, line, strlen(line));
                         close(fd);
-                        // 디버깅용 메시지 (필요 시 주석 해제)
-                        // mvprintw(HEIGHT/2 + 8, (WIDTH-40)/2, "[DEBUG] Saved to file locally.");
-                        // refresh();
                     }
                 }
             }
@@ -341,8 +338,6 @@ int ask_auth_menu() {
 
 // 외부에서 호출하는 메인 함수
 int do_auth_process(const char *db_path, char *username_out) {
-    // ncurses 초기화가 안 되어 있다면 수행 (보통 main에서 하지만 안전장치)
-    // init_screen(); 
 
     while (1) {
         int choice = ask_auth_menu();
