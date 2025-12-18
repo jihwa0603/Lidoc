@@ -26,7 +26,7 @@
 #
 <a id="together"></a>
 
-- 문서 공동 작업 
+- 소켓을 통한 웹 기반 통신 
 
 <img src="images/색 선택.png"><img src="images/함께 작성.png">
 <p>
@@ -39,7 +39,7 @@
 # 
 <a id="search"></a>
 
-- 단어검색기능
+- 원하는 단어 검색 기능
 
 <img src="images/검색.png"><img src="images/검색찾기.png">
 <p>
@@ -50,7 +50,7 @@
 <a id="login"></a>
 
 #
-- 로그인 시스템
+- 로그인을 통한 사용자 구별
 
 <img src="images/로그인_이미지.png">
 
@@ -64,7 +64,7 @@
 #
 <a id="save"></a>
 
-- 주기적 저장
+- 주기적 자동저장 기능
 
 <img src="images/사용자문서.png">
 <img src="images/문서 저장.png">
@@ -78,7 +78,7 @@
 #
 <a id="count"></a>
 
-- 기여도 측정 시스템
+- 사용자 구분 및 기여도 관리
 
 <img src="images/기여도.png">
 <p>
