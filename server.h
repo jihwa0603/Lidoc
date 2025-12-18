@@ -9,10 +9,6 @@
 #include "common_protocol.h"   // Packet 구조체를 알기 위해
 #include "managing_documents.h" // Cell 구조체를 알기 위해
 
-int setup_server_socket(int port, int user_count);
-void handle_client(int client_sock);
-void error_exit(const char *msg);
-void run_server(int port, int user_count);
 
 extern Cell doc_buffer[MAX_BUFFER];
 extern int doc_length;
@@ -20,7 +16,7 @@ extern int doc_length;
 int setup_server_socket(int port, int user_count);
 void handle_client(int client_sock);
 void error_exit(const char *msg);
-void run_server(int port, int user_count);
+void run_server(int port, int user_count, char* doc_name);
 int make_listening_socket(int port, int user_count);
 void *handle_client_thread(void *arg);
 void send_to_all(Packet *pkt, int sender_sock);

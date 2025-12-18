@@ -193,6 +193,7 @@ void loginForm(const char *db_path, char *result_id) {
     if (loginFlag) {
         strcpy(result_id, t1.id);
         mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Successful!");
+        mvprintw(HEIGHT/2 + 6, (WIDTH-30)/2, "Press any key to enter editor...");
     } else {
         mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Failed!");
     }
@@ -247,7 +248,9 @@ int network_login_process(int sock, char *username_out, char* doc_name) {
                 strcpy(username_out, id);
                 free(pw_buf);
                 mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Success!");
-                refresh(); sleep(1);
+                mvprintw(HEIGHT/2 + 6, (WIDTH-30)/2, "Press any key to enter editor...");
+                refresh(); 
+                getch();
                 return 1;
             } else {
                 mvprintw(HEIGHT/2 + 4, (WIDTH-20)/2, "Login Failed!");

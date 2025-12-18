@@ -941,7 +941,6 @@ void process_login_and_color_selection(int socket_fd, char *doc_name, char *user
 
     // 만약 남은 색상이 없다면 기본값(white)으로 자동 등록 (중복 허용)
     if (avail_count == 0) {
-        register_person(doc_name, username, "white");
 
         Packet pkt;
         memset(&pkt, 0, sizeof(Packet));
@@ -993,8 +992,6 @@ void process_login_and_color_selection(int socket_fd, char *doc_name, char *user
         }
     }
 
-    // 선택한 색상으로 파일에 등록
-    register_person(doc_name, username, available_colors[selected_idx]);
 
     Packet pkt;
     memset(&pkt, 0, sizeof(Packet));

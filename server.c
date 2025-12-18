@@ -43,7 +43,8 @@ typedef struct {
 } ServerCell;
 
 Cell server_doc_buffer[MAX_BUFFER]; 
-int server_doc_length = 0;         
+int server_doc_length = 0;        
+char SERVER_DOC_NAME[256] = ""; 
 
 void server_update_insert(int index, char ch, const char *username) {
     // 범위 체크
@@ -121,8 +122,24 @@ void *handle_client_thread(void *arg) {
 
     // 서버의 수신
     while ((bytes_read = read(client_sock, (void*)&pkt, sizeof(Packet))) > 0) {
+        
 
-        if (pkt.command == CMD_LOAD_USERS) {
+        if (pkt.command == CMD_CHECK_DOC_NAME) {
+            Packet res;
+            memset(&res, 0, sizeof(Packet));
+            res.command = CMD_CHECK_DOC_NAME;
+
+            // 클라이언트가 보낸 이름(pkt.text_content)과 서버 이름 비교
+            if (strcmp(SERVER_DOC_NAME, pkt.text_content) == 0) {
+                strcpy(res.message, "1"); // 일치 (성공)
+            } else {
+                strcpy(res.message, "0"); // 불일치 (실패)
+            }
+            
+            write(client_sock, &res, sizeof(Packet));
+        }
+        
+        else if (pkt.command == CMD_LOAD_USERS) {
             host_sock_fd = client_sock; // DB를 보낸 사람이 곧 방장
             user_count_db = 0;
 
@@ -373,11 +390,14 @@ int make_listening_socket(int port, int user_count) {
     return sockfd;
 }
 
-void run_server(int port, int user_count) {
+void run_server(int port, int user_count, char* doc_name) {
     int server_sock, client_sock;
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     pthread_t t_id;
+
+    strcpy(SERVER_DOC_NAME, doc_name);
+    printf("%s",doc_name);
 
     // Mutex 초기화
     pthread_mutex_init(&mutx, NULL);

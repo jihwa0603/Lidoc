@@ -235,6 +235,31 @@ int just_connect(const char *ip, int port) {
     return sock;
 }
 
+int check_doc_name_match(int sock, const char *input_doc_name) {
+    Packet pkt;
+    memset(&pkt, 0, sizeof(Packet));
+    pkt.command = CMD_CHECK_DOC_NAME;
+    strcpy(pkt.text_content, input_doc_name); // 문서 이름을 담아서 보냄
+
+    write(sock, &pkt, sizeof(Packet));
+
+    // 응답 대기
+    while(1){
+        Packet res;
+        read(sock, &res, sizeof(Packet));
+
+        
+        if (res.command == CMD_CHECK_DOC_NAME) {
+            if(strcmp(res.message, "1") == 0)
+                return 1; // 일치함
+        }else {
+            continue;
+        }
+        return 0; // 불일치
+    }
+    
+}
+
 int main() {
     // 폴더 설정
     manage_folder();
@@ -266,7 +291,7 @@ int main() {
             pid_t pid = fork();
             if (pid == 0) {
                 // 자식: 서버 실행
-                run_server(port, 10); 
+                run_server(port, 10, doc_name); 
                 exit(0);
             } else if (pid > 0) {
                 // 부모: 방장 클라이언트
@@ -317,6 +342,20 @@ int main() {
                 end_curses();
                 printf("Connection Failed!\n");
                 getchar();
+                continue;
+            }
+
+            if (check_doc_name_match(sock, doc_name) == 0) {
+                // 이름이 틀렸을 때
+                clear();
+                wborder(stdscr, '|', '|', '-', '-', '+', '+', '+', '+');
+                mvprintw(LINES/2 - 1, (COLS-60)/2, "Error: Document Name Mismatch!");
+                mvprintw(LINES/2 + 1, (COLS-60)/2, "Server is hosting a different document.");
+                mvprintw(LINES/2 + 3, (COLS-60)/2, "Press any key to return to menu...");
+                refresh();
+                getch(); // 키 입력 대기
+                end_curses();
+                close(sock); // 소켓 끊고 메뉴로 돌아감
                 continue;
             }
 
