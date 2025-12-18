@@ -6,7 +6,7 @@ CFLAGS = -Wall -g
 LDFLAGS = -lncurses -lpthread
 
 # 실행 파일 이름
-TARGET = lidoc_app
+TARGET = lidoc
 
 # 소스 파일 목록
 SRCS = start.c server.c managing_documents.c login.c searchTextindocu.c

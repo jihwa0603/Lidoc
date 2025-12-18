@@ -28,7 +28,9 @@
 
 - 소켓을 통한 웹 기반 통신 
 
-<img src="images/색 선택.png"><img src="images/함께 작성.png">
+<img src="images/색 선택.png">
+<br>
+<img src="images/함께 작성.png">
 <p>
 처음 문서에 작성을 할 경우 먼저 색을 선택을 하고 작성을 합니다. <br>
 이미지처럼 사용자 별로 색을 구분하여 문서를 작성합니다.
@@ -41,7 +43,9 @@
 
 - 원하는 단어 검색 기능
 
-<img src="images/검색.png"><img src="images/검색찾기.png">
+<img src="images/검색.png">
+<br>
+<img src="images/검색찾기.png">
 <p>
 문서 내부에서 읽기 상태에서 f키를 눌러 단어를 검색하고 문장을 찾아 줍니다.
 </p>
@@ -67,6 +71,7 @@
 - 주기적 자동저장 기능
 
 <img src="images/사용자문서.png">
+<br>
 <img src="images/문서 저장.png">
 <p>
 누군가가 작성 상태에서 작성을 하고 읽기 모드로 전환을 할 때마다 문서를 저장합니다. <br>
@@ -119,7 +124,10 @@ gcc -o lidoc start.c login.c server.c managing_documents.c searchTextindocu.c -l
 ```bash
 ./lidoc
 ```
-
+- 파일 정리시
+```bash
+make clean
+```
 
 ## 👦 팀원 정보
 
